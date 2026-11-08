@@ -157,6 +157,12 @@ function OrderSuccessContent() {
                   <span>Subtotal</span>
                   <span className="font-medium text-[#1F1F1F]">{formatPKR(order.subtotal)}</span>
                 </div>
+                {!!order.discount && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+                    <span className="font-medium">-{formatPKR(order.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-[#575757]">
                   <span>Nationwide Shipping</span>
                   <span className="font-medium text-[#1F1F1F]">

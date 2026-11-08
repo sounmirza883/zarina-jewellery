@@ -108,6 +108,13 @@ export default function MyOrdersPage() {
                     ))}
                   </ul>
 
+                  {!!order.discount && (
+                    <div className="flex justify-between text-xs text-emerald-700 pt-2">
+                      <span>Coupon{order.couponCode ? ` (${order.couponCode})` : ''}</span>
+                      <span className="font-semibold">-{formatPKR(order.discount)}</span>
+                    </div>
+                  )}
+
                   <div className="flex justify-between text-sm font-bold text-[#1F1F1F] pt-2 border-t border-[#E8DDD0]">
                     <span>Total (Payable on Delivery)</span>
                     <span className="text-[#B8893B]">{formatPKR(order.total)}</span>

@@ -143,6 +143,14 @@ export default function OrderSlip({ order, variant }: { order: Order; variant: '
               <td style={{ padding: '3px 0', color: MUTED }}>Subtotal</td>
               <td style={{ padding: '3px 0', textAlign: 'right' }}>{formatPKR(order.subtotal)}</td>
             </tr>
+            {!!order.discount && (
+              <tr>
+                <td style={{ padding: '3px 0', color: MUTED }}>
+                  Coupon{order.couponCode ? ` (${order.couponCode})` : ''}
+                </td>
+                <td style={{ padding: '3px 0', textAlign: 'right' }}>-{formatPKR(order.discount)}</td>
+              </tr>
+            )}
             <tr>
               <td style={{ padding: '3px 0', color: MUTED }}>Nationwide delivery</td>
               <td style={{ padding: '3px 0', textAlign: 'right' }}>{order.shipping === 0 ? 'FREE' : formatPKR(order.shipping)}</td>

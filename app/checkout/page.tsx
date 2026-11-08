@@ -18,14 +18,16 @@ import {
   Mail,
   AlertCircle,
   FileText,
+  Tag,
 } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
 import { formatPKR, isValidPakistaniPhone, cartItemLabel } from '@/lib/shop-logic';
 import { lineUnitPrice } from '@/lib/pricing';
+import { validateCoupon } from '@/lib/coupons';
 import { createClient } from '@/lib/supabase/client';
 import { supabaseConfigured } from '@/lib/supabase/config';
 import { siteConfig } from '@/config/site';
-import { Order } from '@/types/product';
+import { CouponPreview, Order } from '@/types/product';
 import ProductImage from '@/components/ProductImage';
 
 // Form validation schema using Zod
@@ -62,10 +64,59 @@ type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, clearCart, getTotals } = useCartStore();
-  const totals = getTotals();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Coupon: page state only. `key` is the bag the preview was calculated for, so a bag change re-checks it.
+  // The discount shown here is a preview; place_order works it out again when the order is placed.
+  const [couponCode, setCouponCode] = useState('');
+  const [applied, setApplied] = useState<{ preview: CouponPreview; key: string } | null>(null);
+  const [couponError, setCouponError] = useState('');
+  const [couponBusy, setCouponBusy] = useState(false);
+  const itemsKey = items.map((i) => `${i.cartItemId}:${i.quantity}`).join(',');
+  const totals = getTotals(applied?.preview);
+
+  useEffect(() => {
+    if (!applied || applied.key === itemsKey) return;
+    let cancelled = false;
+    validateCoupon(applied.preview.code, items)
+      .then((preview) => {
+        if (!cancelled) setApplied({ preview, key: itemsKey });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setApplied(null);
+        setCouponError(e instanceof Error ? e.message : 'This coupon no longer applies.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applied, itemsKey, items]);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError('Enter a coupon code.');
+      return;
+    }
+    setCouponBusy(true);
+    setCouponError('');
+    try {
+      const preview = await validateCoupon(couponCode, items);
+      setApplied({ preview, key: itemsKey });
+      setCouponCode('');
+    } catch (e) {
+      setApplied(null);
+      setCouponError(e instanceof Error ? e.message : 'Could not apply this coupon.');
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setApplied(null);
+    setCouponError('');
+  };
 
   const {
     register,
@@ -124,6 +175,7 @@ export default function CheckoutPage() {
       // The server re-prices the bag, adds shipping and assigns the order number (place_order in supabase/schema.sql).
       const { data: placed, error } = await createClient().rpc('place_order', {
         p_lines: items.map((i) => ({ variantId: i.variantId ?? i.cartItemId, quantity: i.quantity })),
+        p_coupon: applied?.preview.code ?? null,
         p_customer: {
           fullName: data.fullName,
           phone: data.phone,
@@ -436,12 +488,77 @@ export default function CheckoutPage() {
                   ))}
                 </div>
 
+                {/* Coupon code */}
+                <div className="pt-3 border-t border-[#E8DDD0]">
+                  {applied ? (
+                    <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+                      <span className="flex items-center gap-1.5 font-semibold">
+                        <Tag className="w-3.5 h-3.5" aria-hidden="true" />
+                        {applied.preview.code} applied
+                      </span>
+                      <button
+                        type="button"
+                        onClick={removeCoupon}
+                        className="underline underline-offset-2 hover:text-emerald-950 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <label htmlFor="coupon-code" className="sr-only">
+                        Coupon code
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          id="coupon-code"
+                          type="text"
+                          value={couponCode}
+                          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                          onKeyDown={(e) => {
+                            // Enter applies the coupon instead of submitting the order form.
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void applyCoupon();
+                            }
+                          }}
+                          maxLength={20}
+                          autoComplete="off"
+                          placeholder="Coupon code"
+                          aria-invalid={!!couponError}
+                          aria-describedby={couponError ? 'coupon-error' : undefined}
+                          className="flex-1 min-w-0 px-3 py-2 text-xs bg-[#FAF7F2] border border-[#E8DDD0] rounded-md font-mono tracking-wider text-[#1F1F1F] placeholder:font-sans placeholder:tracking-normal focus:outline-hidden focus:border-[#B8893B]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void applyCoupon()}
+                          disabled={couponBusy}
+                          className="px-4 py-2 rounded-md border border-[#0B0D12] text-[#0B0D12] hover:bg-[#0B0D12] hover:text-white disabled:opacity-60 text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
+                        >
+                          {couponBusy ? 'Checking...' : 'Apply'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {couponError && (
+                    <p id="coupon-error" role="alert" className="mt-2 text-[11px] text-[#991B1B]">
+                      {couponError}
+                    </p>
+                  )}
+                </div>
+
                 {/* Cost breakdown */}
                 <div className="space-y-2.5 text-xs pt-3 border-t border-[#E8DDD0]">
                   <div className="flex justify-between text-[#575757]">
                     <span>Items Subtotal</span>
                     <span className="font-semibold text-[#1F1F1F]">{formatPKR(totals.subtotal)}</span>
                   </div>
+                  {applied && totals.discount > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Coupon ({applied.preview.code})</span>
+                      <span className="font-semibold">-{formatPKR(totals.discount)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-[#575757]">
                     <span>Nationwide Delivery</span>
                     <span className="font-semibold text-[#1F1F1F]">

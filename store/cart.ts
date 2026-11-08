@@ -29,8 +29,9 @@ interface CartState {
   clearToast: () => void;
 
   // Computed helpers
-  getTotals: () => {
+  getTotals: (coupon?: { discount: number; freeShipping: boolean }) => {
     subtotal: number;
+    discount: number;
     shipping: number;
     total: number;
     freeShippingRemaining: number;
@@ -133,9 +134,9 @@ export const useCartStore = create<CartState>()(
       toggleMobileMenu: () => set((state) => ({ isMobileMenuOpen: !state.isMobileMenuOpen })),
       clearToast: () => set({ toastMessage: null }),
 
-      getTotals: () => {
+      getTotals: (coupon) => {
         const { items, shipping } = get();
-        return calculateCartTotals(items, shipping.flatRate, shipping.freeShippingThreshold);
+        return calculateCartTotals(items, shipping.flatRate, shipping.freeShippingThreshold, coupon);
       },
     }),
     {
