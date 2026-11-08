@@ -1,5 +1,16 @@
 import type {NextConfig} from 'next';
 
+// Uploaded product images live in Supabase Storage. Use the project's own host when .env has it,
+// otherwise allow any *.supabase.co host (the starter .env holds a YOUR-PROJECT-REF placeholder).
+const supabaseHost = (() => {
+  try {
+    const host = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').hostname;
+    return /your-/i.test(host) ? '' : host;
+  } catch {
+    return '';
+  }
+})();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   eslint: {
@@ -22,6 +33,12 @@ const nextConfig: NextConfig = {
         hostname: 'images.unsplash.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: supabaseHost || '**.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
       },
     ],
   },

@@ -20,18 +20,19 @@ import {
   CheckCircle,
   Truck,
   XCircle,
-  RotateCcw,
   Sliders,
   DollarSign,
   Printer,
+  Star,
   X,
   ChevronDown,
   Eye,
   Store,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { formatPKR } from '@/lib/shop-logic';
-import { Product, ProductCategory, Order, OrderStatus } from '@/types/product';
+import { formatPKR, cartItemLabel } from '@/lib/shop-logic';
+import { lineUnitPrice, totalStock, activeVariants } from '@/lib/pricing';
+import { Product, Order, OrderStatus } from '@/types/product';
 import {
   isAdminSession,
   adminSignIn,
@@ -40,44 +41,20 @@ import {
   updateOrderStatus,
   deleteOrder,
   fetchProducts,
-  upsertProduct,
   deleteStoredProduct,
-  resetProductsToDefault,
   fetchSettings,
   saveStoreSettings,
   AdminSettings,
 } from '@/lib/admin-store';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
+import { fetchReviews } from '@/lib/admin-reviews';
+import ProductFormModal from '@/components/admin/ProductFormModal';
+import ReviewsTab from '@/components/admin/ReviewsTab';
+import OrderDispatchPanel from '@/components/admin/OrderDispatchPanel';
+import CouriersEditor from '@/components/admin/CouriersEditor';
+import OrderPdfButton from '@/components/OrderPdfButton';
 import ProductImage from '@/components/ProductImage';
 import AdminOrderChart from '@/components/AdminOrderChart';
-
-// Curated high-res jewellery image presets for quick product addition
-const PRESET_JEWELLERY_IMAGES = [
-  {
-    name: 'Kundan Choker & Jhumka Set',
-    url: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Emerald Green Kundan Choker',
-    url: 'https://images.unsplash.com/photo-1611591475836-8435d648b789?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Bridal Polki & Pearl Haar',
-    url: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Antique Gold Chandbali Earrings',
-    url: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Solitaire Zircon Cocktail Ring',
-    url: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=800&q=80',
-  },
-  {
-    name: 'Handcrafted Kundan Bangle Kara',
-    url: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=800&q=80',
-  },
-];
 
 export default function AdminPortalPage() {
   const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking');
@@ -89,7 +66,7 @@ export default function AdminPortalPage() {
   const [dataError, setDataError] = useState('');
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'reviews' | 'settings'>('overview');
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -104,22 +81,12 @@ export default function AdminPortalPage() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  // Product Form State
-  const [prodFormName, setProdFormName] = useState('');
-  const [prodFormCategory, setProdFormCategory] = useState<ProductCategory>('earrings');
-  const [prodFormPrice, setProdFormPrice] = useState('2450');
-  const [prodFormComparePrice, setProdFormComparePrice] = useState('2950');
-  const [prodFormImage, setProdFormImage] = useState(PRESET_JEWELLERY_IMAGES[0].url);
-  const [prodFormDescription, setProdFormDescription] = useState('');
-  const [prodFormColors, setProdFormColors] = useState('Gold-Tone, Antique Gold');
-  const [prodFormSizes, setProdFormSizes] = useState('Standard');
-  const [prodFormIsNew, setProdFormIsNew] = useState(true);
-  const [prodFormIsBestSeller, setProdFormIsBestSeller] = useState(false);
-  const [prodFormInStock, setProdFormInStock] = useState(true);
-
   // Settings State
   const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+
+  // Reviews waiting for approval (the Reviews tab manages the list itself)
+  const [pendingReviews, setPendingReviews] = useState(0);
 
   // Run a Supabase call; show its error in the dashboard banner instead of throwing.
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -134,10 +101,17 @@ export default function AdminPortalPage() {
   const loadAll = useCallback(
     () =>
       guard(async () => {
-        const [o, p, s] = await Promise.all([fetchOrders(), fetchProducts(), fetchSettings()]);
+        // Reviews are optional here: a failure must not block orders and products from loading.
+        const [o, p, s, r] = await Promise.all([
+          fetchOrders(),
+          fetchProducts(),
+          fetchSettings(),
+          fetchReviews().catch(() => []),
+        ]);
         setOrders(o);
         setProducts(p);
         setSettings(s);
+        setPendingReviews(r.filter((review) => review.status === 'pending').length);
       }),
     [guard]
   );
@@ -211,6 +185,18 @@ export default function AdminPortalPage() {
     return list;
   }, [orders, orderStatusFilter, orderSearch]);
 
+  const refreshPendingReviews = useCallback(() => {
+    fetchReviews()
+      .then((r) => setPendingReviews(r.filter((review) => review.status === 'pending').length))
+      .catch(() => {});
+  }, []);
+
+  // Order changed by the dispatch panel (courier, tracking number, status): keep list and modal in step.
+  const handleOrderPatched = (orderNumber: string, patch: Partial<Order>) => {
+    setOrders((prev) => prev.map((o) => (o.orderNumber === orderNumber ? { ...o, ...patch } : o)));
+    setSelectedOrderForModal((cur) => (cur && cur.orderNumber === orderNumber ? { ...cur, ...patch } : cur));
+  };
+
   // --- STATS OVERVIEW ---
   const stats = useMemo(() => {
     const totalSales = orders
@@ -230,105 +216,35 @@ export default function AdminPortalPage() {
       deliveredOrders,
       avgOrderValue,
       totalProducts: products.length,
+      // Listed variants that are sold out or nearly so
+      lowStockVariants: products
+        .filter((p) => p.inStock)
+        .reduce((n, p) => n + activeVariants(p).filter((v) => v.stockQty <= 3).length, 0),
     };
   }, [orders, products]);
 
   // --- PRODUCTS LOGIC ---
   const openNewProductModal = () => {
     setEditingProduct(null);
-    setProdFormName('');
-    setProdFormCategory('earrings');
-    setProdFormPrice('2450');
-    setProdFormComparePrice('2950');
-    setProdFormImage(PRESET_JEWELLERY_IMAGES[0].url);
-    setProdFormDescription('Exquisite artisanal artificial jewellery piece featuring high-grade crystals and lustrous micro gold-tone plating.');
-    setProdFormColors('Gold-Tone, Antique Gold');
-    setProdFormSizes('Standard');
-    setProdFormIsNew(true);
-    setProdFormIsBestSeller(false);
-    setProdFormInStock(true);
     setIsProductModalOpen(true);
   };
 
   const openEditProductModal = (product: Product) => {
     setEditingProduct(product);
-    setProdFormName(product.name);
-    setProdFormCategory(product.category);
-    setProdFormPrice(product.price.toString());
-    setProdFormComparePrice(product.compareAtPrice ? product.compareAtPrice.toString() : '');
-    setProdFormImage(product.images[0] || PRESET_JEWELLERY_IMAGES[0].url);
-    setProdFormDescription(product.description);
-    setProdFormColors(product.colors.join(', '));
-    setProdFormSizes(product.sizes ? product.sizes.join(', ') : 'Standard');
-    setProdFormIsNew(product.isNew);
-    setProdFormIsBestSeller(product.isBestSeller);
-    setProdFormInStock(product.inStock);
     setIsProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prodFormName.trim()) return;
-
-    const priceNum = parseInt(prodFormPrice, 10) || 1950;
-    const compareNum = prodFormComparePrice ? parseInt(prodFormComparePrice, 10) : undefined;
-    const colorsArr = prodFormColors.split(',').map((c) => c.trim()).filter(Boolean);
-    const sizesArr = prodFormSizes.split(',').map((s) => s.trim()).filter(Boolean);
-
-    const slug =
-      editingProduct?.slug ||
-      prodFormName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-
-    const productData: Product = {
-      id: editingProduct?.id || `zarina-custom-${Date.now()}`,
-      slug,
-      name: prodFormName.trim(),
-      category: prodFormCategory,
-      price: priceNum,
-      compareAtPrice: compareNum,
-      images: [prodFormImage.trim()],
-      colors: colorsArr.length > 0 ? colorsArr : ['Gold-Tone'],
-      sizes: sizesArr.length > 0 ? sizesArr : undefined,
-      description: prodFormDescription.trim() || 'Handcrafted artificial jewellery designed for Pakistani elegance.',
-      details: [
-        'Premium micro gold-tone anti-tarnish plating',
-        'Hypoallergenic & nickel-safe alloy base',
-        'Cash on Delivery available nationwide across Pakistan',
-        'Signature Zarina keepsake presentation box included',
-      ],
-      tags: [prodFormCategory, 'pakistan', 'jewellery', 'bridal', 'cod'],
-      isNew: prodFormIsNew,
-      isBestSeller: prodFormIsBestSeller,
-      inStock: prodFormInStock,
-    };
-
-    guard(async () => {
-      await upsertProduct(productData);
-      setProducts((prev) =>
-        prev.some((p) => p.id === productData.id)
-          ? prev.map((p) => (p.id === productData.id ? productData : p))
-          : [productData, ...prev]
-      );
-      setIsProductModalOpen(false);
-    });
-  };
+  // ProductFormModal saves and closes itself; keep the list in step with the stored values.
+  const handleProductSaved = (saved: Product) =>
+    setProducts((prev) =>
+      prev.some((p) => p.id === saved.id) ? prev.map((p) => (p.id === saved.id ? saved : p)) : [saved, ...prev]
+    );
 
   const handleDeleteProduct = (id: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}" from the catalogue?`)) return;
     guard(async () => {
       await deleteStoredProduct(id);
       setProducts((prev) => prev.filter((p) => p.id !== id));
-    });
-  };
-
-  const handleResetCatalog = () => {
-    if (!confirm('Reset catalogue back to initial 16 Zarina Jewels products? Custom items will be removed.')) return;
-    guard(async () => {
-      await resetProductsToDefault();
-      setProducts(await fetchProducts());
     });
   };
 
@@ -598,6 +514,25 @@ export default function AdminPortalPage() {
             >
               <ShoppingBag className="w-3.5 h-3.5" />
               <span>Catalogue & Inventory ({products.length})</span>
+              {stats.lowStockVariants > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400" title="Some variants are low on stock" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('reviews')}
+              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                activeTab === 'reviews'
+                  ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
+                  : 'border-transparent text-[#CCCCCC] hover:text-white'
+              }`}
+            >
+              <Star className="w-3.5 h-3.5" />
+              <span>Reviews{pendingReviews > 0 ? ` (${pendingReviews} new)` : ''}</span>
+              {pendingReviews > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
             </button>
 
             <button
@@ -846,18 +781,18 @@ export default function AdminPortalPage() {
               </div>
 
               <div
-                onClick={handleResetCatalog}
+                onClick={() => setActiveTab('reviews')}
                 className="bg-white p-5 rounded-xl border border-[#B8893B]/20 hover:border-[#B8893B] shadow-xs cursor-pointer transition-all flex items-center gap-4 group"
               >
                 <div className="w-12 h-12 rounded-lg bg-[#FAF7F2] group-hover:bg-[#0B0D12] text-[#575757] group-hover:text-white flex items-center justify-center transition-colors">
-                  <RotateCcw className="w-6 h-6" />
+                  <Star className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="font-serif text-base font-medium text-[#1F1F1F] group-hover:text-[#0B0D12] transition-colors">
-                    Restore Default Catalog
+                    Review Moderation
                   </h3>
                   <p className="text-xs text-[#575757]">
-                    Reset to 16 initial authentic Zarina Jewels items
+                    {pendingReviews} {pendingReviews === 1 ? 'review' : 'reviews'} awaiting approval
                   </p>
                 </div>
               </div>
@@ -1085,14 +1020,6 @@ export default function AdminPortalPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleResetCatalog}
-                  className="px-3 py-2 text-xs text-[#575757] hover:text-[#0B0D12] bg-[#FAF7F2] hover:bg-[#E8DDD0] rounded-lg border border-[#E8DDD0] transition-colors cursor-pointer"
-                >
-                  Reset Defaults
-                </button>
-
-                <button
-                  type="button"
                   onClick={openNewProductModal}
                   className="px-4 py-2 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs font-semibold uppercase tracking-wider rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                 >
@@ -1111,7 +1038,7 @@ export default function AdminPortalPage() {
                       <th className="py-3.5 px-4">Item</th>
                       <th className="py-3.5 px-4">Category</th>
                       <th className="py-3.5 px-4">Price (PKR)</th>
-                      <th className="py-3.5 px-4">Compare At</th>
+                      <th className="py-3.5 px-4">Regular Price</th>
                       <th className="py-3.5 px-4">Status & Badges</th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
@@ -1148,8 +1075,10 @@ export default function AdminPortalPage() {
                           {formatPKR(p.price)}
                         </td>
 
-                        <td className="py-3 px-4 text-[#8A8A8A] line-through">
-                          {p.compareAtPrice ? formatPKR(p.compareAtPrice) : '—'}
+                        <td className="py-3 px-4 text-[#8A8A8A]">
+                          <span className={p.salePrice !== undefined ? 'line-through' : ''}>
+                            {formatPKR(p.regularPrice)}
+                          </span>
                         </td>
 
                         <td className="py-3 px-4 space-x-1.5">
@@ -1163,13 +1092,22 @@ export default function AdminPortalPage() {
                               Best Seller
                             </span>
                           )}
-                          {p.inStock ? (
+                          {!p.inStock ? (
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-[#E8DDD0] text-[#575757]">
+                              Unlisted
+                            </span>
+                          ) : totalStock(p) > 0 ? (
                             <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-                              In Stock
+                              In Stock · {totalStock(p)} pcs
                             </span>
                           ) : (
                             <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-100 text-rose-800">
-                              Out of Stock
+                              Sold Out
+                            </span>
+                          )}
+                          {p.inStock && activeVariants(p).some((v) => v.stockQty > 0 && v.stockQty <= 3) && (
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800">
+                              Low stock
                             </span>
                           )}
                         </td>
@@ -1212,6 +1150,9 @@ export default function AdminPortalPage() {
         )}
 
         {/* ===================== TAB 4: STORE SETTINGS & COD ===================== */}
+        {/* ===================== TAB: REVIEWS ===================== */}
+        {activeTab === 'reviews' && <ReviewsTab onChanged={refreshPendingReviews} />}
+
         {activeTab === 'settings' && (
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="bg-white p-6 sm:p-8 rounded-xl border border-[#B8893B]/20 shadow-xs">
@@ -1353,6 +1294,11 @@ export default function AdminPortalPage() {
                   />
                 </div>
 
+                <CouriersEditor
+                  couriers={settings.couriers}
+                  onChange={(couriers) => setSettings({ ...settings, couriers })}
+                />
+
                 <div className="pt-4 border-t border-[#E8DDD0] flex items-center justify-end gap-3">
                   <button
                     type="submit"
@@ -1487,13 +1433,12 @@ export default function AdminPortalPage() {
                       <td>{idx + 1}</td>
                       <td className="font-medium">{item.product.name}</td>
                       <td>
-                        {item.selectedColor}
-                        {item.selectedSize ? ` (${item.selectedSize})` : ''}
+                        {cartItemLabel(item)}
                       </td>
                       <td>{item.quantity}</td>
-                      <td>{formatPKR(item.product.price)}</td>
+                      <td>{formatPKR(lineUnitPrice(item))}</td>
                       <td className="font-semibold">
-                        {formatPKR(item.product.price * item.quantity)}
+                        {formatPKR(lineUnitPrice(item) * item.quantity)}
                       </td>
                     </tr>
                   ))}
@@ -1525,17 +1470,26 @@ export default function AdminPortalPage() {
                             {item.product.name}
                           </p>
                           <p className="text-[11px] text-[#575757]">
-                            Qty: {item.quantity} • {item.selectedColor}
-                            {item.selectedSize ? ` (${item.selectedSize})` : ''}
+                            Qty: {item.quantity} • {cartItemLabel(item)}
+                            {item.sku ? ` • ${item.sku}` : ''}
                           </p>
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-[#1F1F1F]">
-                        {formatPKR(item.product.price * item.quantity)}
+                        {formatPKR(lineUnitPrice(item) * item.quantity)}
                       </span>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Courier, tracking number and status timeline */}
+              <div className="no-print py-2">
+                <OrderDispatchPanel
+                  order={selectedOrderForModal}
+                  couriers={settings.couriers}
+                  onUpdated={(patch) => handleOrderPatched(selectedOrderForModal.orderNumber, patch)}
+                />
               </div>
 
               {/* Order Totals */}
@@ -1645,6 +1599,13 @@ export default function AdminPortalPage() {
                     <Printer className="w-3.5 h-3.5" />
                     <span>Print Slip</span>
                   </button>
+
+                  <OrderPdfButton
+                    order={selectedOrderForModal}
+                    variant="admin"
+                    label="Download PDF"
+                    className="px-3 py-2 bg-[#B8893B] hover:bg-[#D9B66A] text-[#0B0D12] rounded text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow"
+                  />
                 </div>
               </div>
             </motion.div>
@@ -1653,221 +1614,12 @@ export default function AdminPortalPage() {
       </AnimatePresence>
 
       {/* ===================== ADD / EDIT PRODUCT MODAL ===================== */}
-      <AnimatePresence>
-        {isProductModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-[#B8893B]/30 p-6 sm:p-8"
-            >
-              <div className="flex items-center justify-between pb-4 border-b border-[#E8DDD0]">
-                <h3 className="font-serif text-2xl font-normal text-[#0B0D12]">
-                  {editingProduct ? 'Edit Jewellery Piece' : 'Add New Jewellery Piece'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsProductModalOpen(false)}
-                  className="p-1.5 rounded-full hover:bg-[#FAF7F2] text-[#575757]"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleSaveProduct} className="py-4 space-y-4 text-xs">
-                <div>
-                  <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                    Piece Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={prodFormName}
-                    onChange={(e) => setProdFormName(e.target.value)}
-                    placeholder="e.g. Royal Emerald Kundan Choker Set"
-                    required
-                    className="w-full px-3 py-2 text-sm bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                      Category *
-                    </label>
-                    <select
-                      value={prodFormCategory}
-                      onChange={(e) => setProdFormCategory(e.target.value as ProductCategory)}
-                      className="w-full px-3 py-2 text-sm bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                    >
-                      <option value="earrings">Earrings</option>
-                      <option value="necklaces">Necklaces</option>
-                      <option value="rings">Rings</option>
-                      <option value="bracelets">Bracelets</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                      Price (PKR) *
-                    </label>
-                    <input
-                      type="number"
-                      value={prodFormPrice}
-                      onChange={(e) => setProdFormPrice(e.target.value)}
-                      required
-                      className="w-full px-3 py-2 text-sm bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                      Compare Price (PKR)
-                    </label>
-                    <input
-                      type="number"
-                      value={prodFormComparePrice}
-                      onChange={(e) => setProdFormComparePrice(e.target.value)}
-                      placeholder="Optional"
-                      className="w-full px-3 py-2 text-sm bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                    />
-                  </div>
-                </div>
-
-                {/* Image Selection / Presets */}
-                <div>
-                  <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                    Image URL *
-                  </label>
-                  <input
-                    type="url"
-                    value={prodFormImage}
-                    onChange={(e) => setProdFormImage(e.target.value)}
-                    required
-                    className="w-full px-3 py-2 text-xs bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                  />
-                  <span className="text-[10px] text-[#8A8A8A] mt-1 block">
-                    Or select from curated jewellery image presets:
-                  </span>
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-2">
-                    {PRESET_JEWELLERY_IMAGES.map((preset) => (
-                      <button
-                        key={preset.name}
-                        type="button"
-                        onClick={() => setProdFormImage(preset.url)}
-                        className={`relative aspect-square rounded overflow-hidden border-2 cursor-pointer transition-all ${
-                          prodFormImage === preset.url
-                            ? 'border-[#B8893B] ring-2 ring-[#B8893B]/30'
-                            : 'border-transparent opacity-70 hover:opacity-100'
-                        }`}
-                        title={preset.name}
-                      >
-                        <ProductImage
-                          src={preset.url}
-                          alt={preset.name}
-                          fill
-                          sizes="60px"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={prodFormDescription}
-                    onChange={(e) => setProdFormDescription(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                  />
-                </div>
-
-                {/* Colors & Sizes */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                      Color Options (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={prodFormColors}
-                      onChange={(e) => setProdFormColors(e.target.value)}
-                      placeholder="Gold-Tone, Silver Finish, Rose Gold"
-                      className="w-full px-3 py-2 text-xs bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                      Size Options (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={prodFormSizes}
-                      onChange={(e) => setProdFormSizes(e.target.value)}
-                      placeholder="Standard, 2.4, 2.6, Adjustable"
-                      className="w-full px-3 py-2 text-xs bg-[#FAF7F2] border border-[#E8DDD0] rounded-md text-[#1F1F1F] focus:outline-hidden focus:border-[#B8893B]"
-                    />
-                  </div>
-                </div>
-
-                {/* Flags */}
-                <div className="flex flex-wrap items-center gap-5 pt-2">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={prodFormIsNew}
-                      onChange={(e) => setProdFormIsNew(e.target.checked)}
-                      className="rounded text-[#B8893B] focus:ring-[#B8893B]"
-                    />
-                    <span className="font-medium text-[#1F1F1F]">Mark as New Arrival</span>
-                  </label>
-
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={prodFormIsBestSeller}
-                      onChange={(e) => setProdFormIsBestSeller(e.target.checked)}
-                      className="rounded text-[#B8893B] focus:ring-[#B8893B]"
-                    />
-                    <span className="font-medium text-[#1F1F1F]">Mark as Best Seller</span>
-                  </label>
-
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={prodFormInStock}
-                      onChange={(e) => setProdFormInStock(e.target.checked)}
-                      className="rounded text-[#B8893B] focus:ring-[#B8893B]"
-                    />
-                    <span className="font-medium text-[#1F1F1F]">In Stock</span>
-                  </label>
-                </div>
-
-                <div className="pt-4 border-t border-[#E8DDD0] flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsProductModalOpen(false)}
-                    className="px-4 py-2 border border-[#E8DDD0] text-[#575757] rounded-md hover:bg-[#FAF7F2]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-[#0B0D12] hover:bg-[#B8893B] text-white font-semibold uppercase tracking-wider rounded-md transition-colors"
-                  >
-                    {editingProduct ? 'Update Product' : 'Save Product'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      <ProductFormModal
+        open={isProductModalOpen}
+        product={editingProduct}
+        onClose={() => setIsProductModalOpen(false)}
+        onSaved={handleProductSaved}
+      />
     </div>
   );
 }

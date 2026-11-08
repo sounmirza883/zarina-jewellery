@@ -1,15 +1,9 @@
-import { PRODUCTS } from '@/data/products';
 import type { Product, Order, OrderStatus } from '@/types/product';
 import { createClient } from '@/lib/supabase/client';
 import { supabaseConfigured } from '@/lib/supabase/config';
 import { DEFAULT_SETTINGS, type AdminSettings } from '@/lib/settings';
-import {
-  productToRow,
-  rowToOrder,
-  rowToProduct,
-  type OrderRow,
-  type ProductRow,
-} from '@/lib/supabase/mappers';
+import { rowToOrder, rowToProduct, type OrderRow, type ProductRow } from '@/lib/supabase/mappers';
+import { BUCKET, productToSaveArgs, storagePathFromUrl, validateImageFile } from '@/lib/product-form';
 import { revalidateStorefront } from '@/app/actions/revalidate';
 
 export type { AdminSettings };
@@ -108,7 +102,7 @@ export async function adminSignOut(): Promise<void> {
 export async function fetchOrders(): Promise<Order[]> {
   const { data, error } = await createClient()
     .from('orders')
-    .select('*')
+    .select('*, order_events(*)')
     .order('created_at', { ascending: false })
     .limit(500);
   check(error);
@@ -136,36 +130,90 @@ export async function deleteOrder(orderNumber: string): Promise<void> {
 }
 
 // --- PRODUCTS ---
+const PRODUCT_SELECT = '*, product_variants(*)';
+
 export async function fetchProducts(): Promise<Product[]> {
   const { data, error } = await createClient()
     .from('products')
-    .select('*')
+    .select(PRODUCT_SELECT)
     .order('created_at', { ascending: false });
   check(error);
   return (data as ProductRow[]).map(rowToProduct);
 }
 
-export async function upsertProduct(product: Product): Promise<void> {
-  const { error } = await createClient().from('products').upsert(productToRow(product));
+/** One product with all its variants (including inactive ones), or null if it no longer exists. */
+export async function fetchProduct(id: string): Promise<Product | null> {
+  const { data, error } = await createClient().from('products').select(PRODUCT_SELECT).eq('id', id).maybeSingle();
+  check(error);
+  return data ? rowToProduct(data as ProductRow) : null;
+}
+
+/** Creates or updates a product and its variants in one transaction. Returns the product id. */
+export async function saveProduct(product: Product): Promise<string> {
+  const { data, error } = await createClient().rpc('save_product', productToSaveArgs(product));
   check(error);
   await refreshStorefront();
+  return data as string;
+}
+
+const MAX_SIDE = 1600;
+const EXTENSIONS: Record<string, string> = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg' };
+
+/** Downscales to 1600px on the longest side and re-encodes as WebP (browsers without WebP encoding return PNG). */
+async function resizeImage(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not process the image in this browser.');
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.85));
+  if (!blob) throw new Error('Could not process the image.');
+  return blob;
+}
+
+/** Uploads one image to the product-images bucket under a random name and returns its public URL. */
+export async function uploadProductImage(file: File): Promise<string> {
+  const problem = validateImageFile(file);
+  if (problem) throw new Error(problem);
+
+  const blob = await resizeImage(file);
+  const path = `${crypto.randomUUID()}.${EXTENSIONS[blob.type] ?? 'webp'}`;
+  const storage = createClient().storage.from(BUCKET);
+  const { error } = await storage.upload(path, blob, { contentType: blob.type, upsert: false });
+  check(error);
+  return storage.getPublicUrl(path).data.publicUrl;
+}
+
+/** Removes uploaded files from the bucket. URLs that are not ours (external images) are ignored; failures are only logged. */
+export async function deleteProductImages(urls: string[]): Promise<void> {
+  const paths = urls.map(storagePathFromUrl).filter((p): p is string => p !== null);
+  if (paths.length === 0) return;
+  const { error } = await createClient().storage.from(BUCKET).remove(paths);
+  if (error) console.warn('Could not remove product images', error.message);
 }
 
 export async function deleteStoredProduct(id: string): Promise<void> {
-  const { data, error } = await createClient().from('products').delete().eq('id', id).select('id');
+  const supabase = createClient();
+  // Read the image URLs first: once the product row is gone they cannot be looked up.
+  const { data: row } = await supabase
+    .from('products')
+    .select('images, product_variants(image_url)')
+    .eq('id', id)
+    .maybeSingle();
+
+  const { data, error } = await supabase.from('products').delete().eq('id', id).select('id');
   check(error);
   requireRows(data);
-  await refreshStorefront();
-}
 
-/** Removes custom products and restores the 16 seed products to their original values. */
-export async function resetProductsToDefault(): Promise<void> {
-  const supabase = createClient();
-  const seedIds = PRODUCTS.map((p) => p.id);
-  const removed = await supabase.from('products').delete().not('id', 'in', `(${seedIds.join(',')})`);
-  check(removed.error);
-  const restored = await supabase.from('products').upsert(PRODUCTS.map(productToRow));
-  check(restored.error);
+  const urls = [
+    ...((row?.images as string[] | undefined) ?? []),
+    ...(((row?.product_variants as { image_url: string | null }[] | undefined) ?? []).map((v) => v.image_url)),
+  ].filter((u): u is string => Boolean(u));
+  await deleteProductImages([...new Set(urls)]);
   await refreshStorefront();
 }
 
@@ -176,6 +224,7 @@ export async function fetchSettings(): Promise<AdminSettings> {
   return { ...DEFAULT_SETTINGS, ...(data?.data ?? {}) };
 }
 
+// Sends the whole settings object (including couriers), so callers must pass every field.
 export async function saveStoreSettings(settings: AdminSettings): Promise<void> {
   const { error } = await createClient().from('store_settings').upsert({ id: true, data: settings });
   check(error);
