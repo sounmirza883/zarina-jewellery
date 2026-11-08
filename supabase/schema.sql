@@ -14,6 +14,7 @@
 --   profiles          customer accounts (name, phone, saved address)
 --   orders            + customer link, coupon discount
 --   coupons           discount coupons (percent, fixed amount, free delivery)
+--   wishlist_items    each customer's saved products (signed-in customers only)
 --   store_settings    shipping rules, announcement bar
 --   product-images    Storage bucket for admin image uploads
 --
@@ -36,6 +37,7 @@
 -- Access model
 --   products, product_variants, store_settings   public read, admin write
 --   coupons           admin only; customers check a code with validate_coupon()
+--   wishlist_items    each customer reads and changes only their own rows
 --   reviews           public sees approved ones only; visitors add reviews through
 --                     submit_review(); admin approves or deletes
 --   orders            visitors have NO direct access: they place orders through
@@ -46,6 +48,7 @@
 -- Calls the app makes
 --   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...}, p_coupon })  -- p_coupon optional
 --   rpc('validate_coupon', { p_code, p_lines: [{ variantId, quantity }] })   -- checkout preview
+--   rpc('wishlist_merge', { p_ids: ['zj-ring-01', ...] })                    -- signed-in customers
 --   rpc('submit_review', { p_product_id, p_rating, p_author, p_title, p_body, p_hp })
 --   rpc('save_product',  { p_product: {...}, p_variants: [...] })      -- admin only
 -- place_order also still accepts the older { productId, color, size, quantity } lines.
@@ -317,6 +320,15 @@ create table if not exists public.coupons (
       or (kind = 'fixed' and value >= 1)
       or (kind = 'free_shipping' and value = 0)),
   check (starts_at is null or expires_at is null or expires_at > starts_at)
+);
+
+-- Saved products. The primary key and the foreign keys cap a customer's rows at the number of products,
+-- and deleting a product or an account removes the rows. Guests keep their list in the browser instead.
+create table if not exists public.wishlist_items (
+  user_id    uuid not null references auth.users (id) on delete cascade,
+  product_id text not null references public.products (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, product_id)
 );
 
 
@@ -765,6 +777,41 @@ begin
   end loop;
 
   return public.coupon_discount(p_code, v_items, null, auth.uid(), false);
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 13c. Wishlist: merge a browser list into the account and return the full list
+--      SECURITY INVOKER on purpose: Row Level Security keeps every customer to their own rows.
+--      Unknown product ids are ignored, repeats are harmless, and at most 200 ids are accepted.
+-- ---------------------------------------------------------------------
+
+create or replace function public.wishlist_merge(p_ids text[])
+returns text[]
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_uid uuid := auth.uid();
+begin
+  if v_uid is null then
+    raise exception 'Please sign in to save your wishlist.';
+  end if;
+  if coalesce(cardinality(p_ids), 0) > 200 then
+    raise exception 'Too many items in the wishlist.';
+  end if;
+
+  insert into public.wishlist_items (user_id, product_id)
+  select v_uid, p.id
+    from public.products p
+   where p.id = any (coalesce(p_ids, '{}'::text[]))
+  on conflict do nothing;
+
+  return coalesce(
+    array(select w.product_id from public.wishlist_items w where w.user_id = v_uid order by w.created_at, w.product_id),
+    '{}'::text[]
+  );
 end;
 $$;
 
@@ -1380,6 +1427,7 @@ alter table public.reviews          enable row level security;
 alter table public.profiles         enable row level security;
 alter table public.orders           enable row level security;
 alter table public.coupons          enable row level security;
+alter table public.wishlist_items   enable row level security;
 alter table public.store_settings   enable row level security;
 
 -- products
@@ -1444,6 +1492,13 @@ create policy coupons_admin_all on public.coupons
   using ((select public.is_admin()))
   with check ((select public.is_admin()));
 
+-- wishlist_items: a customer sees and changes only their own rows
+drop policy if exists wishlist_owner on public.wishlist_items;
+create policy wishlist_owner on public.wishlist_items
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
+
 -- store_settings
 drop policy if exists settings_read on public.store_settings;
 create policy settings_read on public.store_settings
@@ -1461,7 +1516,7 @@ create policy settings_admin_write on public.store_settings
 -- ---------------------------------------------------------------------
 
 revoke all on public.products, public.product_variants, public.reviews, public.profiles,
-              public.orders, public.coupons, public.store_settings
+              public.orders, public.coupons, public.wishlist_items, public.store_settings
   from anon, authenticated;
 
 grant select on public.products, public.product_variants, public.store_settings to anon, authenticated;
@@ -1477,10 +1532,12 @@ grant select, insert, update on public.profiles to authenticated;
 
 grant select, update, delete on public.orders to authenticated;
 grant select, insert, update, delete on public.coupons to authenticated;
+grant select, insert, delete on public.wishlist_items to authenticated;
 
 -- Functions. Supabase grants EXECUTE to anon/authenticated by default, so reset each one.
 revoke all on function public.place_order(jsonb, jsonb, text)                        from public, anon, authenticated;
 revoke all on function public.validate_coupon(text, jsonb)                           from public, anon, authenticated;
+revoke all on function public.wishlist_merge(text[])                                 from public, anon, authenticated;
 revoke all on function public.coupon_discount(text, jsonb, text, uuid, boolean)      from public, anon, authenticated;
 revoke all on function public.submit_review(text, integer, text, text, text, text)   from public, anon, authenticated;
 revoke all on function public.save_product(jsonb, jsonb)                             from public, anon, authenticated;
@@ -1495,6 +1552,7 @@ revoke all on function public.orders_restock()                                  
 
 grant execute on function public.place_order(jsonb, jsonb, text)                      to anon, authenticated;
 grant execute on function public.validate_coupon(text, jsonb)                         to anon, authenticated;
+grant execute on function public.wishlist_merge(text[])                               to authenticated;
 grant execute on function public.submit_review(text, integer, text, text, text, text) to anon, authenticated;
 grant execute on function public.save_product(jsonb, jsonb)                           to authenticated;
 grant execute on function public.jsonb_text_array(jsonb)                              to authenticated;
