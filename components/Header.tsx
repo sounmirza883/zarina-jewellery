@@ -9,14 +9,31 @@ import {
   Menu,
   X,
   Sparkles,
-  MessageCircle,
   Truck,
   User,
+  LogIn,
+  UserPlus,
+  Package,
+  UserRound,
+  LogOut,
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
-import { useSignedIn } from '@/lib/account';
+import { signOut, useSignedIn } from '@/lib/account';
 import MobileMenuDrawer from './MobileMenuDrawer';
+import NavMenu from './NavMenu';
+
+const SHOP_MENU = [
+  { name: 'Earrings', href: '/category/earrings' },
+  { name: 'Necklaces', href: '/category/necklaces' },
+  { name: 'Rings', href: '/category/rings' },
+  { name: 'Bracelets', href: '/category/bracelets' },
+  { name: 'New Arrivals', href: '/new-arrivals', divided: true },
+  { name: 'Best Sellers', href: '/best-sellers' },
+];
+
+const MENU_ITEM =
+  'flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs font-medium uppercase tracking-widest transition-colors hover:bg-[#FAF7F2] hover:text-[#B8893B]';
 
 export default function Header({ announcement }: { announcement: { enabled: boolean; text: string } }) {
   const pathname = usePathname();
@@ -28,15 +45,11 @@ export default function Header({ announcement }: { announcement: { enabled: bool
   const totalItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const signedIn = useSignedIn();
 
-  const navLinks = [
-    { name: 'Shop All', href: '/shop' },
-    { name: 'Earrings', href: '/category/earrings' },
-    { name: 'Necklaces', href: '/category/necklaces' },
-    { name: 'Rings', href: '/category/rings' },
-    { name: 'Bracelets', href: '/category/bracelets' },
-    { name: 'New Arrivals', href: '/new-arrivals' },
-    { name: 'Best Sellers', href: '/best-sellers' },
-  ];
+  const shopActive =
+    pathname === '/shop' ||
+    pathname.startsWith('/category/') ||
+    pathname === '/new-arrivals' ||
+    pathname === '/best-sellers';
 
   if (pathname.startsWith('/admin')) {
     return null;
@@ -49,6 +62,12 @@ export default function Header({ announcement }: { announcement: { enabled: bool
       setSearchOpen(false);
       setSearchQuery('');
     }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/');
+    router.refresh();
   };
 
   return (
@@ -104,28 +123,43 @@ export default function Header({ announcement }: { announcement: { enabled: bool
               </Link>
             </div>
 
-            {/* Desktop Navigation Links */}
-            <nav className="hidden lg:flex items-center space-x-7">
-              {navLinks.map((link) => {
-                const isActive = pathname === link.href;
-                return (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    className={`text-xs uppercase tracking-widest font-medium transition-colors hover:text-[#B8893B] relative py-1 ${
-                      isActive ? 'text-[#B8893B] font-semibold' : 'text-[#1F1F1F]'
-                    }`}
-                  >
-                    {link.name}
-                    {isActive && (
+            {/* Desktop Navigation: Shop All with its hover menu */}
+            <nav className="hidden lg:flex items-center" aria-label="Main">
+              <NavMenu
+                label="Open shop menu"
+                href="/shop"
+                triggerClassName={`relative py-1 whitespace-nowrap text-xs uppercase tracking-widest font-medium transition-colors hover:text-[#B8893B] ${
+                  shopActive ? 'text-[#B8893B] font-semibold' : 'text-[#1F1F1F]'
+                }`}
+                trigger={
+                  <>
+                    Shop All
+                    {shopActive && (
                       <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8893B] rounded-full" />
                     )}
-                  </Link>
-                );
-              })}
+                  </>
+                }
+              >
+                {(close) =>
+                  SHOP_MENU.map((link) => (
+                    <div key={link.href} className={link.divided ? 'mt-1.5 pt-1.5 border-t border-[#E8DDD0]' : ''}>
+                      <Link
+                        href={link.href}
+                        onClick={close}
+                        aria-current={pathname === link.href ? 'page' : undefined}
+                        className={`${MENU_ITEM} ${
+                          pathname === link.href ? 'text-[#B8893B]' : 'text-[#1F1F1F]'
+                        }`}
+                      >
+                        {link.name}
+                      </Link>
+                    </div>
+                  ))
+                }
+              </NavMenu>
             </nav>
 
-            {/* Actions: Search, Contact/WhatsApp, Cart */}
+            {/* Actions: Search, Account menu, Bag */}
             <div className="flex items-center space-x-2 sm:space-x-4">
               <button
                 type="button"
@@ -137,49 +171,71 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                 <span className="tracking-wide">Search</span>
               </button>
 
-              <a
-                href={siteConfig.contact.whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:flex items-center gap-1.5 text-xs text-[#1F1F1F] hover:text-[#B8893B] px-2.5 py-1.5 rounded-full border border-[#B8893B]/30 hover:border-[#B8893B] bg-white transition-all shadow-2xs"
-                title="Chat on WhatsApp"
+              {/* Account menu: Track Order lives here. The icon is the same size for everyone, so the bar does not shift. */}
+              <NavMenu
+                label="Account menu"
+                align="right"
+                triggerClassName="block p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
+                trigger={<User className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />}
               >
-                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                <span className="font-medium text-[11px] tracking-wider uppercase">WhatsApp</span>
-              </a>
+                {(close) =>
+                  signedIn ? (
+                    <>
+                      <Link href="/account" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                        <UserRound className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                        My Details
+                      </Link>
+                      <Link href="/account/orders" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                        <Package className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                        My Orders
+                      </Link>
+                      <Link href="/track-order" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                        <Truck className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                        Track Order
+                      </Link>
+                      <div className="mt-1.5 pt-1.5 border-t border-[#E8DDD0]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            close();
+                            void handleSignOut();
+                          }}
+                          className={`${MENU_ITEM} cursor-pointer text-[#575757]`}
+                        >
+                          <LogOut className="w-4 h-4" aria-hidden="true" />
+                          Sign out
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <Link href="/login" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                        <LogIn className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                        Log in
+                      </Link>
+                      <Link href="/signup" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                        <UserPlus className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                        Create account
+                      </Link>
+                      <div className="mt-1.5 pt-1.5 border-t border-[#E8DDD0]">
+                        <Link href="/track-order" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
+                          <Truck className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
+                          Track Order
+                        </Link>
+                      </div>
+                    </>
+                  )
+                }
+              </NavMenu>
 
-              {/* Order tracking (desktop; the mobile menu has its own link) */}
-              <Link
-                href="/track-order"
-                className="hidden lg:flex items-center gap-1.5 p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
-                aria-label="Track your order"
-                title="Track your order"
-              >
-                <Truck className="w-5 h-5" />
-                <span className="hidden xl:inline text-xs font-semibold tracking-wider">Track</span>
-              </Link>
-
-              {/* Account: icon only so the bar does not shift when the session is detected */}
-              <Link
-                href={signedIn ? '/account' : '/login'}
-                className="p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
-                aria-label={signedIn ? 'My account' : 'Log in or create an account'}
-                title={signedIn ? 'My account' : 'Log in'}
-              >
-                <User className="w-5 h-5 sm:w-6 sm:h-6" />
-              </Link>
-
-              {/* Shopping Bag Button */}
+              {/* Shopping Bag Button (icon only; the count badge shows what is inside) */}
               <button
                 type="button"
                 onClick={openDrawer}
-                className="relative p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors flex items-center gap-1.5"
+                className="relative p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
                 aria-label={`Shopping bag with ${totalItemCount} items`}
               >
                 <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
-                <span className="hidden sm:inline-block text-xs font-semibold tracking-wider">
-                  Bag
-                </span>
                 {totalItemCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-[#0B0D12] text-[#FAF7F2] text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#FAF7F2]">
                     {totalItemCount}
