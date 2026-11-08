@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
+import { AnimatePresence, m } from 'motion/react';
 import { signOut, useSignedIn } from '@/lib/account';
 import MobileMenuDrawer from './MobileMenuDrawer';
 import NavMenu from './NavMenu';
@@ -253,11 +254,19 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                 aria-label={`Shopping bag with ${totalItemCount} items`}
               >
                 <ShoppingBag className="w-5 h-5 sm:w-6 sm:h-6" />
-                {totalItemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#0B0D12] text-[#FAF7F2] text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#FAF7F2]">
-                    {totalItemCount}
-                  </span>
-                )}
+                <AnimatePresence initial={false}>
+                  {totalItemCount > 0 && (
+                    <m.span
+                      key={totalItemCount}
+                      initial={{ scale: 1.6 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                      className="absolute -top-1 -right-1 bg-[#0B0D12] text-[#FAF7F2] text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-[#FAF7F2]"
+                    >
+                      {totalItemCount}
+                    </m.span>
+                  )}
+                </AnimatePresence>
               </button>
             </div>
           </div>

@@ -78,12 +78,12 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
 
         {/* Quick Add Overlay on hover (Desktop) & persistent bottom bar (Touch/Mobile) */}
         {!soldOut && (
-          <div className="absolute inset-x-2 bottom-2 z-10 flex gap-1.5 opacity-90 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-x-2 bottom-2 z-10 flex gap-1.5 opacity-90 md:opacity-0 md:translate-y-2 md:group-hover:opacity-100 md:group-hover:translate-y-0 md:group-focus-within:opacity-100 md:group-focus-within:translate-y-0 motion-reduce:translate-y-0 transition-[opacity,transform] duration-300 ease-out">
             {quickAddVariant ? (
               <button
                 type="button"
                 onClick={handleQuickAdd}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs font-medium rounded shadow transition-colors duration-200"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs font-medium rounded shadow active:scale-[0.97] motion-reduce:active:scale-100 transition-[color,background-color,transform] duration-200"
                 aria-label={`Quick add ${product.name} to cart`}
               >
                 <ShoppingBag className="w-3.5 h-3.5" />

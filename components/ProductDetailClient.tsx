@@ -383,7 +383,7 @@ export default function ProductDetailClient({
                   type="button"
                   onClick={handleAddToCart}
                   disabled={!canBuy}
-                  className="w-full py-3.5 px-4 bg-[#0B0D12] hover:bg-[#B8893B] disabled:bg-[#8A8A8A] disabled:cursor-not-allowed text-white text-xs font-semibold uppercase tracking-widest rounded-md transition-colors shadow-md flex items-center justify-center gap-2"
+                  className="w-full py-3.5 px-4 bg-[#0B0D12] hover:bg-[#B8893B] disabled:bg-[#8A8A8A] disabled:cursor-not-allowed text-white text-xs font-semibold uppercase tracking-widest rounded-md active:scale-[0.97] motion-reduce:active:scale-100 transition-[color,background-color,transform] shadow-md flex items-center justify-center gap-2"
                 >
                   <ShoppingBag className="w-4 h-4" />
                   <span>{canBuy ? 'Add to Bag' : 'Sold Out'}</span>
@@ -392,7 +392,7 @@ export default function ProductDetailClient({
                   type="button"
                   onClick={handleBuyNow}
                   disabled={!canBuy}
-                  className="w-full py-3.5 px-4 bg-[#B8893B] hover:bg-[#D9B66A] disabled:bg-[#E8DDD0] disabled:text-[#8A8A8A] disabled:cursor-not-allowed text-[#0B0D12] text-xs font-semibold uppercase tracking-widest rounded-md transition-colors shadow-md flex items-center justify-center gap-2"
+                  className="w-full py-3.5 px-4 bg-[#B8893B] hover:bg-[#D9B66A] disabled:bg-[#E8DDD0] disabled:text-[#8A8A8A] disabled:cursor-not-allowed text-[#0B0D12] text-xs font-semibold uppercase tracking-widest rounded-md active:scale-[0.97] motion-reduce:active:scale-100 transition-[color,background-color,transform] shadow-md flex items-center justify-center gap-2"
                 >
                   <Zap className="w-4 h-4 fill-current" />
                   <span>Buy Now (COD)</span>
