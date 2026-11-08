@@ -8,6 +8,7 @@ import CartDrawer from '@/components/CartDrawer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
 import ToastNotification from '@/components/ToastNotification';
 import SettingsHydrator from '@/components/SettingsHydrator';
+import WishlistSync from '@/components/WishlistSync';
 import MotionProvider from '@/components/motion/MotionProvider';
 import { getSiteSettings } from '@/lib/api';
 
@@ -94,6 +95,7 @@ export default async function RootLayout({
             flatRate={settings.flatShippingRate}
             freeShippingThreshold={settings.freeShippingThreshold}
           />
+          <WishlistSync />
           <Header
             announcement={{ enabled: settings.announcementEnabled, text: settings.announcementText }}
           />
