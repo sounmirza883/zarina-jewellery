@@ -10,9 +10,12 @@ import {
   X,
   Sparkles,
   MessageCircle,
+  Truck,
+  User,
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
+import { useSignedIn } from '@/lib/account';
 import MobileMenuDrawer from './MobileMenuDrawer';
 
 export default function Header({ announcement }: { announcement: { enabled: boolean; text: string } }) {
@@ -23,6 +26,7 @@ export default function Header({ announcement }: { announcement: { enabled: bool
 
   const { items, openDrawer, openMobileMenu } = useCartStore();
   const totalItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
+  const signedIn = useSignedIn();
 
   const navLinks = [
     { name: 'Shop All', href: '/shop' },
@@ -143,6 +147,27 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                 <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                 <span className="font-medium text-[11px] tracking-wider uppercase">WhatsApp</span>
               </a>
+
+              {/* Order tracking (desktop; the mobile menu has its own link) */}
+              <Link
+                href="/track-order"
+                className="hidden lg:flex items-center gap-1.5 p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
+                aria-label="Track your order"
+                title="Track your order"
+              >
+                <Truck className="w-5 h-5" />
+                <span className="hidden xl:inline text-xs font-semibold tracking-wider">Track</span>
+              </Link>
+
+              {/* Account: icon only so the bar does not shift when the session is detected */}
+              <Link
+                href={signedIn ? '/account' : '/login'}
+                className="p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
+                aria-label={signedIn ? 'My account' : 'Log in or create an account'}
+                title={signedIn ? 'My account' : 'Log in'}
+              >
+                <User className="w-5 h-5 sm:w-6 sm:h-6" />
+              </Link>
 
               {/* Shopping Bag Button */}
               <button

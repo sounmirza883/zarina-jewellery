@@ -2,7 +2,8 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPABASE_URL, SUPABASE_KEY, supabaseConfigured } from '@/lib/supabase/config';
 
-// Only keeps the admin's Supabase session fresh. Access control lives in Row Level Security.
+// Keeps Supabase sessions fresh on /admin and /account, and sends signed-out visitors from /account
+// to the login page. Data access control itself lives in Row Level Security.
 export async function middleware(request: NextRequest) {
   if (!supabaseConfigured) return NextResponse.next();
 
@@ -20,8 +21,20 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+
+  if (!data.user && request.nextUrl.pathname.startsWith('/account')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.search = `?next=${encodeURIComponent(request.nextUrl.pathname)}`;
+    const redirect = NextResponse.redirect(url);
+    redirect.headers.set('Cache-Control', 'private, no-store');
+    // Keep any cookies the refresh attempt just cleared or set.
+    response.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+    return redirect;
+  }
+
   return response;
 }
 
-export const config = { matcher: ['/admin/:path*'] };
+export const config = { matcher: ['/admin/:path*', '/account/:path*'] };

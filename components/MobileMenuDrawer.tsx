@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
+import { useSignedIn } from '@/lib/account';
 
 function subscribe() {
   return () => {};
@@ -31,6 +32,7 @@ export default function MobileMenuDrawer() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const { isMobileMenuOpen, closeMobileMenu } = useCartStore();
+  const signedIn = useSignedIn();
 
   // Lock body scroll when drawer is open
   useEffect(() => {
@@ -66,6 +68,10 @@ export default function MobileMenuDrawer() {
     { name: 'Shop All Pieces', href: '/shop' },
     { name: 'New Arrivals', href: '/new-arrivals' },
     { name: 'Best Sellers', href: '/best-sellers' },
+    signedIn
+      ? { name: 'My Account & Orders', href: '/account' }
+      : { name: 'Log In / Create Account', href: '/login' },
+    { name: 'Track My Order', href: '/track-order' },
     { name: 'Our Story & Heritage', href: '/about' },
     { name: 'Contact & Support', href: '/contact' },
     { name: '7-Day Return Policy', href: '/policies/returns' },
