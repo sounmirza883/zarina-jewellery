@@ -31,7 +31,7 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
   };
 
   return (
-    <div className="group flex flex-col bg-white rounded-lg border border-[#FAF7F2] hover:border-[#B8893B]/30 shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden">
+    <div className="group flex flex-col h-full bg-white rounded-lg border border-[#FAF7F2] hover:border-[#B8893B]/30 shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden">
       {/* Product Image Container */}
       <Link
         href={`/product/${product.slug}`}

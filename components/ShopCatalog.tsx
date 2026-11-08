@@ -6,6 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react';
 import { Product, ProductCategory } from '@/types/product';
 import ProductCard from './ProductCard';
+import Reveal from './motion/Reveal';
+import { columnDelay } from './motion/timing';
 
 interface ShopCatalogProps {
   initialProducts: Product[];
@@ -105,7 +107,7 @@ export default function ShopCatalog({
     <div className="py-10 sm:py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Page Header */}
-        <div className="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
+        <Reveal className="text-center max-w-3xl mx-auto mb-10 sm:mb-14">
           <span className="text-xs uppercase tracking-[0.25em] text-[#B8893B] font-semibold block mb-2">
             Zarina Jewels Catalogue
           </span>
@@ -116,7 +118,7 @@ export default function ShopCatalog({
             {pageSubtitle}
           </p>
           <div className="w-16 h-0.5 bg-[#B8893B] mx-auto mt-4" />
-        </div>
+        </Reveal>
 
         {/* Filter & Controls Bar */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-[#B8893B]/20 shadow-xs mb-8 space-y-4">
@@ -282,7 +284,9 @@ export default function ShopCatalog({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {filteredProducts.map((product, idx) => (
-              <ProductCard key={product.id} product={product} priority={idx < 4} />
+              <Reveal key={product.id} className="h-full" delay={columnDelay(idx)}>
+                <ProductCard product={product} priority={idx < 4} />
+              </Reveal>
             ))}
           </div>
         )}

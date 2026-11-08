@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
+import Reveal from './motion/Reveal';
 
 export default function BrandStoryBlock() {
   return (
@@ -9,7 +10,7 @@ export default function BrandStoryBlock() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           {/* Visual Showcase (2 photos grid) */}
-          <div className="lg:col-span-5 relative">
+          <Reveal className="lg:col-span-5 relative">
             <div className="relative aspect-[4/5] rounded-2xl overflow-hidden border border-[#B8893B]/30 shadow-2xl bg-[#F5EDE1]">
               <Image
                 src="https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80"
@@ -31,10 +32,10 @@ export default function BrandStoryBlock() {
                 Handpicked glass kundan, AAA zircons, and rich gold-tone plating for lasting luster.
               </p>
             </div>
-          </div>
+          </Reveal>
 
           {/* Text Content */}
-          <div className="lg:col-span-7 lg:pl-6 space-y-6">
+          <Reveal delay={0.1} className="lg:col-span-7 lg:pl-6 space-y-6">
             <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#B8893B] font-semibold">
               <span className="w-8 h-px bg-[#B8893B]" />
               <span>Our Philosophy</span>
@@ -81,7 +82,7 @@ export default function BrandStoryBlock() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          </div>
+          </Reveal>
         </div>
       </div>
     </section>

@@ -2,12 +2,14 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { CATEGORIES } from '@/data/products';
 import ProductImage from './ProductImage';
+import Reveal from './motion/Reveal';
+import { columnDelay } from './motion/timing';
 
 export default function CategoryTiles() {
   return (
     <section className="py-16 sm:py-24 bg-[#FAF7F2]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-12">
+        <Reveal className="text-center max-w-2xl mx-auto mb-12">
           <span className="text-xs uppercase tracking-[0.25em] text-[#B8893B] font-semibold block mb-2">
             Curated Collections
           </span>
@@ -15,12 +17,12 @@ export default function CategoryTiles() {
             Shop by Category
           </h2>
           <div className="w-12 h-0.5 bg-[#B8893B] mx-auto mt-4" />
-        </div>
+        </Reveal>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {CATEGORIES.map((cat) => (
+          {CATEGORIES.map((cat, idx) => (
+            <Reveal key={cat.id} delay={columnDelay(idx)}>
             <Link
-              key={cat.id}
               href={`/category/${cat.slug}`}
               className="group relative block aspect-[3/4] rounded-xl overflow-hidden shadow-xs hover:shadow-xl transition-all duration-300 border border-[#FAF7F2] hover:border-[#B8893B]/40 bg-white"
             >
@@ -53,6 +55,7 @@ export default function CategoryTiles() {
                 </div>
               </div>
             </Link>
+            </Reveal>
           ))}
         </div>
       </div>

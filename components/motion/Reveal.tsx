@@ -1,11 +1,7 @@
 'use client';
 
 import { m } from 'motion/react';
-
-export const EASE_OUT = [0.22, 1, 0.36, 1] as const;
-
-/** Grid cards reveal in columns: 0, 60, 120, 180 ms, so a long grid never waits. */
-export const columnDelay = (index: number, columns = 4) => (index % columns) * 0.06;
+import { EASE_OUT } from './timing';
 
 interface RevealProps {
   children: React.ReactNode;

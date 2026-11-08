@@ -5,6 +5,8 @@ import CategoryTiles from '@/components/CategoryTiles';
 import TrustStrip from '@/components/TrustStrip';
 import BrandStoryBlock from '@/components/BrandStoryBlock';
 import ProductCard from '@/components/ProductCard';
+import Reveal from '@/components/motion/Reveal';
+import { columnDelay } from '@/components/motion/timing';
 import { getNewArrivals, getBestSellers } from '@/lib/api';
 
 export default async function HomePage() {
@@ -22,7 +24,7 @@ export default async function HomePage() {
       {/* 3. New Arrivals Section */}
       <section className="py-16 sm:py-20 bg-white border-b border-[#B8893B]/15">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 pb-4 border-b border-[#FAF7F2]">
+          <Reveal className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 pb-4 border-b border-[#FAF7F2]">
             <div>
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#B8893B] font-semibold mb-2">
                 <Sparkles className="w-3.5 h-3.5" />
@@ -39,11 +41,13 @@ export default async function HomePage() {
               <span>View All New Pieces</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
-          </div>
+          </Reveal>
 
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {newArrivals.map((product, idx) => (
-              <ProductCard key={product.id} product={product} priority={idx < 2} />
+              <Reveal key={product.id} className="h-full" delay={columnDelay(idx)}>
+                <ProductCard product={product} priority={idx < 2} />
+              </Reveal>
             ))}
           </div>
         </div>
@@ -55,7 +59,7 @@ export default async function HomePage() {
       {/* 5. Best Sellers Section */}
       <section className="py-16 sm:py-20 bg-[#FAF7F2] border-b border-[#B8893B]/15">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 pb-4 border-b border-[#E8DDD0]">
+          <Reveal className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 pb-4 border-b border-[#E8DDD0]">
             <div>
               <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#B8893B] font-semibold mb-2">
                 <Flame className="w-3.5 h-3.5" />
@@ -72,11 +76,13 @@ export default async function HomePage() {
               <span>Explore All Best Sellers</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
-          </div>
+          </Reveal>
 
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {bestSellers.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {bestSellers.map((product, idx) => (
+              <Reveal key={product.id} className="h-full" delay={columnDelay(idx)}>
+                <ProductCard product={product} />
+              </Reveal>
             ))}
           </div>
         </div>

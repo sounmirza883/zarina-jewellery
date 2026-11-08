@@ -1,5 +1,7 @@
 import { ShieldCheck, RotateCcw, Truck, MessageCircle } from 'lucide-react';
 import { siteConfig } from '@/config/site';
+import Reveal from './motion/Reveal';
+import { columnDelay } from './motion/timing';
 
 export default function TrustStrip() {
   const trustItems = [
@@ -32,8 +34,9 @@ export default function TrustStrip() {
           {trustItems.map((item, idx) => {
             const Icon = item.icon;
             return (
-              <div
+              <Reveal
                 key={idx}
+                delay={columnDelay(idx)}
                 className="flex items-start gap-4 p-4 rounded-lg bg-[#FAF7F2]/60 hover:bg-[#FAF7F2] transition-colors border border-[#FAF7F2] hover:border-[#B8893B]/30"
               >
                 <div className="w-12 h-12 rounded-full bg-[#0B0D12] text-[#D9B66A] flex items-center justify-center shrink-0 shadow-sm">
@@ -47,7 +50,7 @@ export default function TrustStrip() {
                     {item.desc}
                   </p>
                 </div>
-              </div>
+              </Reveal>
             );
           })}
         </div>
