@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -25,7 +25,6 @@ import {
   DollarSign,
   Printer,
   X,
-  Sparkles,
   ChevronDown,
   Eye,
   Store,
@@ -34,20 +33,21 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatPKR } from '@/lib/shop-logic';
 import { Product, ProductCategory, Order, OrderStatus } from '@/types/product';
 import {
-  isAdminAuthenticated,
-  setAdminAuthenticated,
-  getStoredOrders,
-  saveOrders,
+  isAdminSession,
+  adminSignIn,
+  adminSignOut,
+  fetchOrders,
   updateOrderStatus,
   deleteOrder,
-  getStoredProducts,
+  fetchProducts,
   upsertProduct,
   deleteStoredProduct,
   resetProductsToDefault,
-  getStoreSettings,
+  fetchSettings,
   saveStoreSettings,
   AdminSettings,
 } from '@/lib/admin-store';
+import { DEFAULT_SETTINGS } from '@/lib/settings';
 import ProductImage from '@/components/ProductImage';
 import AdminOrderChart from '@/components/AdminOrderChart';
 
@@ -80,21 +80,25 @@ const PRESET_JEWELLERY_IMAGES = [
 ];
 
 export default function AdminPortalPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => isAdminAuthenticated());
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking');
+  const isAuthenticated = authState === 'in';
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [dataError, setDataError] = useState('');
 
   // Active Admin Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'settings'>('overview');
 
   // Orders State
-  const [orders, setOrders] = useState<Order[]>(() => getStoredOrders());
+  const [orders, setOrders] = useState<Order[]>([]);
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [selectedOrderForModal, setSelectedOrderForModal] = useState<Order | null>(null);
 
   // Products State
-  const [products, setProducts] = useState<Product[]>(() => getStoredProducts());
+  const [products, setProducts] = useState<Product[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState<string>('all');
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -114,62 +118,79 @@ export default function AdminPortalPage() {
   const [prodFormInStock, setProdFormInStock] = useState(true);
 
   // Settings State
-  const [settings, setSettings] = useState<AdminSettings>(() => getStoreSettings());
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
 
-  // Subscribe to external storage updates
-  useEffect(() => {
-    const handleOrdersUpdate = () => setOrders(getStoredOrders());
-    const handleProductsUpdate = () => setProducts(getStoredProducts());
-    const handleSettingsUpdate = () => setSettings(getStoreSettings());
-
-    window.addEventListener('zarina_orders_updated', handleOrdersUpdate);
-    window.addEventListener('zarina_products_updated', handleProductsUpdate);
-    window.addEventListener('zarina_settings_updated', handleSettingsUpdate);
-
-    return () => {
-      window.removeEventListener('zarina_orders_updated', handleOrdersUpdate);
-      window.removeEventListener('zarina_products_updated', handleProductsUpdate);
-      window.removeEventListener('zarina_settings_updated', handleSettingsUpdate);
-    };
+  // Run a Supabase call; show its error in the dashboard banner instead of throwing.
+  const guard = useCallback(async (fn: () => Promise<void>) => {
+    try {
+      await fn();
+      setDataError('');
+    } catch (e) {
+      setDataError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
+    }
   }, []);
 
-  // Handle PIN Login
-  const handlePinSubmit = (e: React.FormEvent) => {
+  const loadAll = useCallback(
+    () =>
+      guard(async () => {
+        const [o, p, s] = await Promise.all([fetchOrders(), fetchProducts(), fetchSettings()]);
+        setOrders(o);
+        setProducts(p);
+        setSettings(s);
+      }),
+    [guard]
+  );
+
+  // Look for an existing admin session once; if there is one, load orders, products and settings together.
+  useEffect(() => {
+    isAdminSession()
+      .then((ok) => {
+        setAuthState(ok ? 'in' : 'out');
+        if (ok) loadAll();
+      })
+      .catch(() => setAuthState('out'));
+  }, [loadAll]);
+
+  // Handle admin login (Supabase Auth, email + password)
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Default PIN: 1234 or zarina
-    if (pinInput === '1234' || pinInput.toLowerCase() === 'zarina') {
-      setAdminAuthenticated(true);
-      setIsAuthenticated(true);
-      setPinError(false);
-    } else {
-      setPinError(true);
+    setLoginBusy(true);
+    const message = await adminSignIn(loginEmail.trim(), loginPassword);
+    setLoginBusy(false);
+    if (message) {
+      setLoginError(message);
+      return;
     }
+    setLoginError('');
+    setLoginPassword('');
+    setAuthState('in');
+    loadAll();
   };
 
-  const handleLogout = () => {
-    setAdminAuthenticated(false);
-    setIsAuthenticated(false);
-    setPinInput('');
+  const handleLogout = async () => {
+    await adminSignOut();
+    setOrders([]);
+    setProducts([]);
+    setLoginPassword('');
+    setAuthState('out');
   };
 
   // --- ORDERS LOGIC ---
-  const handleStatusChange = (orderNumber: string, newStatus: OrderStatus) => {
-    updateOrderStatus(orderNumber, newStatus);
-    setOrders(getStoredOrders());
-    if (selectedOrderForModal && selectedOrderForModal.orderNumber === orderNumber) {
-      setSelectedOrderForModal({ ...selectedOrderForModal, status: newStatus });
-    }
-  };
+  const handleStatusChange = (orderNumber: string, newStatus: OrderStatus) =>
+    guard(async () => {
+      await updateOrderStatus(orderNumber, newStatus);
+      setOrders((prev) => prev.map((o) => (o.orderNumber === orderNumber ? { ...o, status: newStatus } : o)));
+      setSelectedOrderForModal((cur) => (cur?.orderNumber === orderNumber ? { ...cur, status: newStatus } : cur));
+    });
 
   const handleDeleteOrder = (orderNumber: string) => {
-    if (confirm(`Are you sure you want to delete order ${orderNumber}?`)) {
-      deleteOrder(orderNumber);
-      setOrders(getStoredOrders());
-      if (selectedOrderForModal?.orderNumber === orderNumber) {
-        setSelectedOrderForModal(null);
-      }
-    }
+    if (!confirm(`Are you sure you want to delete order ${orderNumber}?`)) return;
+    guard(async () => {
+      await deleteOrder(orderNumber);
+      setOrders((prev) => prev.filter((o) => o.orderNumber !== orderNumber));
+      setSelectedOrderForModal((cur) => (cur?.orderNumber === orderNumber ? null : cur));
+    });
   };
 
   const filteredOrders = useMemo(() => {
@@ -284,23 +305,31 @@ export default function AdminPortalPage() {
       inStock: prodFormInStock,
     };
 
-    upsertProduct(productData);
-    setProducts(getStoredProducts());
-    setIsProductModalOpen(false);
+    guard(async () => {
+      await upsertProduct(productData);
+      setProducts((prev) =>
+        prev.some((p) => p.id === productData.id)
+          ? prev.map((p) => (p.id === productData.id ? productData : p))
+          : [productData, ...prev]
+      );
+      setIsProductModalOpen(false);
+    });
   };
 
   const handleDeleteProduct = (id: string, name: string) => {
-    if (confirm(`Are you sure you want to delete "${name}" from the catalogue?`)) {
-      deleteStoredProduct(id);
-      setProducts(getStoredProducts());
-    }
+    if (!confirm(`Are you sure you want to delete "${name}" from the catalogue?`)) return;
+    guard(async () => {
+      await deleteStoredProduct(id);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    });
   };
 
   const handleResetCatalog = () => {
-    if (confirm('Reset catalogue back to initial 16 Zarina Jewels products? Custom items will be reset.')) {
-      resetProductsToDefault();
-      setProducts(getStoredProducts());
-    }
+    if (!confirm('Reset catalogue back to initial 16 Zarina Jewels products? Custom items will be removed.')) return;
+    guard(async () => {
+      await resetProductsToDefault();
+      setProducts(await fetchProducts());
+    });
   };
 
   const filteredProducts = useMemo(() => {
@@ -323,9 +352,11 @@ export default function AdminPortalPage() {
   // --- SETTINGS LOGIC ---
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    saveStoreSettings(settings);
-    setSettingsSavedToast(true);
-    setTimeout(() => setSettingsSavedToast(false), 3000);
+    guard(async () => {
+      await saveStoreSettings(settings);
+      setSettingsSavedToast(true);
+      setTimeout(() => setSettingsSavedToast(false), 3000);
+    });
   };
 
   // Helper for WhatsApp confirmation message
@@ -381,7 +412,15 @@ export default function AdminPortalPage() {
     }
   };
 
-  // --- PIN AUTHENTICATION SCREEN ---
+  if (authState === 'checking') {
+    return (
+      <div className="min-h-screen bg-[#0B0D12] text-[#8A8A8A] flex items-center justify-center text-sm">
+        Loading…
+      </div>
+    );
+  }
+
+  // --- ADMIN LOGIN SCREEN ---
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#0B0D12] text-[#FAF7F2] flex items-center justify-center p-4">
@@ -400,49 +439,63 @@ export default function AdminPortalPage() {
             </p>
           </div>
 
-          <form onSubmit={handlePinSubmit} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-[#D9B66A] font-semibold mb-2">
-                Enter Security Passcode
+              <label
+                htmlFor="admin-email"
+                className="block text-xs uppercase tracking-wider text-[#D9B66A] font-semibold mb-2"
+              >
+                Admin Email
               </label>
               <input
-                type="password"
-                value={pinInput}
+                id="admin-email"
+                type="email"
+                autoComplete="username"
+                value={loginEmail}
                 onChange={(e) => {
-                  setPinInput(e.target.value);
-                  setPinError(false);
+                  setLoginEmail(e.target.value);
+                  setLoginError('');
                 }}
-                placeholder="Enter PIN (Default: 1234)"
                 autoFocus
-                className={`w-full px-4 py-3 bg-[#0B0D12] border rounded-lg text-white text-center text-lg tracking-widest placeholder-[#575757] focus:outline-hidden ${
-                  pinError ? 'border-rose-500' : 'border-[#B8893B]/40 focus:border-[#D9B66A]'
+                required
+                className="w-full px-4 py-3 bg-[#0B0D12] border border-[#B8893B]/40 focus:border-[#D9B66A] rounded-lg text-white placeholder-[#575757] focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="admin-password"
+                className="block text-xs uppercase tracking-wider text-[#D9B66A] font-semibold mb-2"
+              >
+                Password
+              </label>
+              <input
+                id="admin-password"
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(e) => {
+                  setLoginPassword(e.target.value);
+                  setLoginError('');
+                }}
+                required
+                className={`w-full px-4 py-3 bg-[#0B0D12] border rounded-lg text-white placeholder-[#575757] focus:outline-hidden ${
+                  loginError ? 'border-rose-500' : 'border-[#B8893B]/40 focus:border-[#D9B66A]'
                 }`}
               />
-              {pinError && (
-                <p className="text-xs text-rose-400 mt-2 text-center">
-                  Incorrect PIN. Try <strong>1234</strong> or click quick unlock below.
+              {loginError && (
+                <p role="alert" className="text-xs text-rose-400 mt-2 text-center">
+                  {loginError}
                 </p>
               )}
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 bg-[#B8893B] hover:bg-[#D9B66A] text-[#0B0D12] text-xs uppercase tracking-widest font-bold rounded-lg transition-colors cursor-pointer"
+              disabled={loginBusy}
+              className="w-full py-3 bg-[#B8893B] hover:bg-[#D9B66A] disabled:opacity-60 text-[#0B0D12] text-xs uppercase tracking-widest font-bold rounded-lg transition-colors cursor-pointer"
             >
-              Sign In to Admin
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setPinInput('1234');
-                setAdminAuthenticated(true);
-                setIsAuthenticated(true);
-              }}
-              className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-[#CCCCCC] text-xs font-medium rounded-lg border border-white/10 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[#D9B66A]" />
-              <span>One-Click Demo Unlock (PIN: 1234)</span>
+              {loginBusy ? 'Signing in…' : 'Sign In to Admin'}
             </button>
           </form>
 
@@ -565,6 +618,23 @@ export default function AdminPortalPage() {
 
       {/* Main Container */}
       <main className="admin-main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {dataError && (
+          <div
+            role="alert"
+            className="no-print mb-6 flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"
+          >
+            <span>{dataError}</span>
+            <button
+              type="button"
+              onClick={() => setDataError('')}
+              className="shrink-0 font-semibold hover:underline"
+              aria-label="Dismiss error"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         {/* ===================== TAB 1: OVERVIEW ===================== */}
         {activeTab === 'overview' && (
           <div className="space-y-8">

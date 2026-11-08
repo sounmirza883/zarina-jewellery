@@ -1,272 +1,18 @@
 import { PRODUCTS } from '@/data/products';
-import { Product, Order, OrderStatus } from '@/types/product';
-import { siteConfig } from '@/config/site';
+import type { Product, Order, OrderStatus } from '@/types/product';
+import { createClient } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/config';
+import { DEFAULT_SETTINGS, type AdminSettings } from '@/lib/settings';
+import {
+  productToRow,
+  rowToOrder,
+  rowToProduct,
+  type OrderRow,
+  type ProductRow,
+} from '@/lib/supabase/mappers';
+import { revalidateStorefront } from '@/app/actions/revalidate';
 
-export interface AdminSettings {
-  announcementText: string;
-  announcementEnabled: boolean;
-  whatsappNumber: string;
-  contactPhone: string;
-  supportEmail: string;
-  studioAddress: string;
-  flatShippingRate: number;
-  freeShippingThreshold: number;
-  codNotice: string;
-}
-
-const DEFAULT_SETTINGS: AdminSettings = {
-  announcementText: siteConfig.announcement.text,
-  announcementEnabled: siteConfig.announcement.enabled,
-  whatsappNumber: siteConfig.contact.whatsapp,
-  contactPhone: siteConfig.contact.phone,
-  supportEmail: siteConfig.contact.email,
-  studioAddress: siteConfig.contact.address,
-  flatShippingRate: siteConfig.shipping.flatRate,
-  freeShippingThreshold: siteConfig.shipping.freeShippingThreshold,
-  codNotice: 'Cash on Delivery (COD) Only - Pay when you receive parcel',
-};
-
-// Realistic Seed Orders for Pakistani artificial jewellery storefront
-export const INITIAL_SEED_ORDERS: Order[] = [
-  {
-    orderNumber: 'ZJ-98214',
-    items: [
-      {
-        cartItemId: 'zarina-1-Gold-Tone-Standard',
-        product: PRODUCTS[0], // Royal Kundan Chandbali Earrings
-        quantity: 1,
-        selectedColor: 'Gold-Tone with Pearls',
-      },
-      {
-        cartItemId: 'zarina-3-Ruby-Red-Standard',
-        product: PRODUCTS[2], // Noor Bridal Choker
-        quantity: 1,
-        selectedColor: 'Antique Gold with Ruby Accents',
-      },
-    ],
-    subtotal: 7300,
-    shipping: 0,
-    total: 7300,
-    customer: {
-      fullName: 'Amina Farooq',
-      phone: '03014589231',
-      whatsapp: '03014589231',
-      email: 'amina.farooq@gmail.com',
-      province: 'Punjab',
-      city: 'Lahore',
-      address: 'House # 42, Block C, Phase 5, DHA',
-      notes: 'Please call before delivery. Mehndi event next Friday.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 mins ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Pending Phone Confirmation',
-  },
-  {
-    orderNumber: 'ZJ-98189',
-    items: [
-      {
-        cartItemId: 'zarina-5-Gold-Tone-Standard',
-        product: PRODUCTS[4], // Zarina Floral Zircon Cocktail Ring
-        quantity: 2,
-        selectedColor: 'Gold-Tone with Clear Zircons',
-        selectedSize: 'Adjustable',
-      },
-    ],
-    subtotal: 3300,
-    shipping: 250,
-    total: 3550,
-    customer: {
-      fullName: 'Dr. Sarah Mansoor',
-      phone: '03218845129',
-      whatsapp: '03218845129',
-      email: 'sarah.mansoor@shifa.pk',
-      province: 'Islamabad Capital Territory',
-      city: 'Islamabad',
-      address: 'Apartment 4B, Silver Oaks, F-10/4',
-      notes: 'Please dispatch in safe jewelry gift box.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4 hours ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Confirmed',
-  },
-  {
-    orderNumber: 'ZJ-98142',
-    items: [
-      {
-        cartItemId: 'zarina-7-Gold-Tone-Standard',
-        product: PRODUCTS[6], // Traditional Kundan Openable Kara
-        quantity: 1,
-        selectedColor: 'Traditional Gold & Enamel',
-        selectedSize: '2.6 (Standard)',
-      },
-    ],
-    subtotal: 2750,
-    shipping: 250,
-    total: 3000,
-    customer: {
-      fullName: 'Fatima Bilal',
-      phone: '03332456789',
-      whatsapp: '03332456789',
-      province: 'Sindh',
-      city: 'Karachi',
-      address: 'B-12, Khayaban-e-Mujahid, Phase 5, Clifton',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 22).toISOString(), // 22 hours ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Dispatched',
-  },
-  {
-    orderNumber: 'ZJ-98075',
-    items: [
-      {
-        cartItemId: 'zarina-2-Silver-Finish-Standard',
-        product: PRODUCTS[1], // Minimalist Zircon Solitaire Studs
-        quantity: 1,
-        selectedColor: 'Silver Finish with Cubic Zirconia',
-      },
-      {
-        cartItemId: 'zarina-4-Rose-Gold-Standard',
-        product: PRODUCTS[3], // Delicate Solitaire Zircon Pendant
-        quantity: 1,
-        selectedColor: 'Rose Gold-Tone',
-      },
-    ],
-    subtotal: 3400,
-    shipping: 250,
-    total: 3650,
-    customer: {
-      fullName: 'Zainab Qureshi',
-      phone: '03456789123',
-      whatsapp: '03456789123',
-      email: 'zainab.q@outlook.com',
-      province: 'Khyber Pakhtunkhwa',
-      city: 'Peshawar',
-      address: 'House # 18, University Town, Near Jamrud Road',
-      notes: 'Delivered safely via TCS courier. Cash collected.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Delivered',
-  },
-  {
-    orderNumber: 'ZJ-97990',
-    items: [
-      {
-        cartItemId: 'zarina-8-Gold-Tone-Standard',
-        product: PRODUCTS[7], // Regal Navratan Rani Haar Set
-        quantity: 1,
-        selectedColor: 'Multi-Stone Navratan Gold Finish',
-      },
-    ],
-    subtotal: 6200,
-    shipping: 0,
-    total: 6200,
-    customer: {
-      fullName: 'Huma Tariq',
-      phone: '03009988776',
-      province: 'Punjab',
-      city: 'Faisalabad',
-      address: 'Street # 4, Madina Town, Faisalabad',
-      notes: 'Customer changed wedding plan, requested cancellation.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Cancelled',
-  },
-  {
-    orderNumber: 'ZJ-97912',
-    items: [
-      {
-        cartItemId: 'zarina-6-Gold-Standard',
-        product: PRODUCTS[5], // Vintage Mughal Filigree Band
-        quantity: 1,
-        selectedColor: 'Antique Gold-Tone',
-        selectedSize: 'Adjustable',
-      },
-      {
-        cartItemId: 'zarina-10-Silver-Standard',
-        product: PRODUCTS[9], // Sleek Cubic Zirconia Tennis Bracelet
-        quantity: 1,
-        selectedColor: 'Silver Rhodium Finish',
-        selectedSize: 'Standard 7 inch',
-      },
-    ],
-    subtotal: 3600,
-    shipping: 0,
-    total: 3600,
-    customer: {
-      fullName: 'Areeba Shakeel',
-      phone: '03125544332',
-      whatsapp: '03125544332',
-      email: 'areeba.shakeel@gmail.com',
-      province: 'Punjab',
-      city: 'Rawalpindi',
-      address: 'House # 112, Street 7, Bahria Town Phase 4',
-      notes: 'Delivered on time via courier.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString(), // 4 days ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Delivered',
-  },
-  {
-    orderNumber: 'ZJ-97855',
-    items: [
-      {
-        cartItemId: 'zarina-11-Gold-Standard',
-        product: PRODUCTS[10], // Textured Gold-Tone Bangle Cuff
-        quantity: 1,
-        selectedColor: 'Hammered Gold-Tone',
-        selectedSize: 'Standard',
-      },
-    ],
-    subtotal: 1850,
-    shipping: 250,
-    total: 2100,
-    customer: {
-      fullName: 'Nida Aslam',
-      phone: '03317766554',
-      whatsapp: '03317766554',
-      province: 'Punjab',
-      city: 'Multan',
-      address: 'House # 23, Shalimar Colony, Bosan Road',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString(), // 5 days ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Delivered',
-  },
-  {
-    orderNumber: 'ZJ-97810',
-    items: [
-      {
-        cartItemId: 'zarina-4-Rose-Gold-Standard',
-        product: PRODUCTS[3], // Delicate Solitaire Zircon Pendant
-        quantity: 1,
-        selectedColor: 'Rose Gold-Tone',
-      },
-      {
-        cartItemId: 'zarina-2-Silver-Finish-Standard',
-        product: PRODUCTS[1], // Minimalist Zircon Studs
-        quantity: 1,
-        selectedColor: 'Silver Finish with Cubic Zirconia',
-      },
-    ],
-    subtotal: 3400,
-    shipping: 250,
-    total: 3650,
-    customer: {
-      fullName: 'Mahnoor Baloch',
-      phone: '03229988112',
-      whatsapp: '03229988112',
-      province: 'Balochistan',
-      city: 'Quetta',
-      address: 'Bungalow 7, Model Town, Hali Road',
-      notes: 'Safe delivery confirmed.',
-    },
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 144).toISOString(), // 6 days ago
-    paymentMethod: 'Cash on Delivery',
-    status: 'Delivered',
-  },
-];
+export type { AdminSettings };
 
 export interface DailyOrderVolume {
   date: string;
@@ -309,140 +55,129 @@ export function getDailyOrderVolume(orders: Order[]): DailyOrderVolume[] {
   return result;
 }
 
-const STORAGE_KEYS = {
-  AUTH: 'zarina_admin_auth',
-  ORDERS: 'zarina_admin_orders',
-  PRODUCTS: 'zarina_custom_products',
-  SETTINGS: 'zarina_store_settings',
-};
+// Every function below runs in the browser as the signed-in admin.
+// Row Level Security (supabase/schema.sql) is what actually enforces "admin only".
 
-// --- AUTHENTICATION ---
-export function isAdminAuthenticated(): boolean {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem(STORAGE_KEYS.AUTH) === 'true';
+function check(error: { message: string } | null) {
+  if (error) throw new Error(error.message);
 }
 
-export function setAdminAuthenticated(auth: boolean): void {
-  if (typeof window === 'undefined') return;
-  if (auth) {
-    localStorage.setItem(STORAGE_KEYS.AUTH, 'true');
-  } else {
-    localStorage.removeItem(STORAGE_KEYS.AUTH);
+// RLS hides rows from a non-admin without raising an error, so an empty result means the write did not happen.
+function requireRows(rows: unknown[] | null) {
+  if (!rows?.length) {
+    throw new Error('Nothing was changed. You may have been signed out; sign in again as an admin.');
   }
+}
+
+// Best effort: the database write already succeeded, and the storefront also refreshes itself on a timer.
+async function refreshStorefront() {
+  try {
+    await revalidateStorefront();
+  } catch (e) {
+    console.warn('Storefront refresh failed', e);
+  }
+}
+
+// --- AUTHENTICATION ---
+export async function isAdminSession(): Promise<boolean> {
+  if (!supabaseConfigured) return false;
+  const { data } = await createClient().auth.getUser();
+  return data.user?.app_metadata?.role === 'admin';
+}
+
+/** Returns an error message, or null on success. */
+export async function adminSignIn(email: string, password: string): Promise<string | null> {
+  if (!supabaseConfigured) {
+    return 'Supabase is not configured yet. Add your URL and anon key to .env, then restart the server.';
+  }
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return error.message;
+  if (data.user.app_metadata?.role !== 'admin') {
+    await supabase.auth.signOut();
+    return 'This account does not have admin access.';
+  }
+  return null;
+}
+
+export async function adminSignOut(): Promise<void> {
+  await createClient().auth.signOut();
 }
 
 // --- ORDERS ---
-export function getStoredOrders(): Order[] {
-  if (typeof window === 'undefined') return INITIAL_SEED_ORDERS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ORDERS);
-    if (!raw) {
-      // Also check if any orders were saved in checkout history
-      const checkoutHistoryRaw = localStorage.getItem('zarina_order_history');
-      let combined = [...INITIAL_SEED_ORDERS];
-      if (checkoutHistoryRaw) {
-        const checkoutOrders: Order[] = JSON.parse(checkoutHistoryRaw);
-        const existingNumbers = new Set(combined.map((o) => o.orderNumber));
-        for (const order of checkoutOrders) {
-          if (!existingNumbers.has(order.orderNumber)) {
-            combined.unshift(order);
-          }
-        }
-      }
-      localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(combined));
-      return combined;
-    }
-    return JSON.parse(raw);
-  } catch {
-    return INITIAL_SEED_ORDERS;
-  }
+export async function fetchOrders(): Promise<Order[]> {
+  const { data, error } = await createClient()
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+  check(error);
+  return (data as OrderRow[]).map(rowToOrder);
 }
 
-export function saveOrders(orders: Order[]): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
-  // Dispatch custom event for cross-component sync
-  window.dispatchEvent(new Event('zarina_orders_updated'));
+export async function updateOrderStatus(orderNumber: string, status: OrderStatus): Promise<void> {
+  const { data, error } = await createClient()
+    .from('orders')
+    .update({ status })
+    .eq('order_number', orderNumber)
+    .select('order_number');
+  check(error);
+  requireRows(data);
 }
 
-export function updateOrderStatus(orderNumber: string, newStatus: OrderStatus): void {
-  const orders = getStoredOrders();
-  const updated = orders.map((order) => {
-    if (order.orderNumber === orderNumber) {
-      return { ...order, status: newStatus };
-    }
-    return order;
-  });
-  saveOrders(updated);
-}
-
-export function deleteOrder(orderNumber: string): void {
-  const orders = getStoredOrders();
-  const filtered = orders.filter((o) => o.orderNumber !== orderNumber);
-  saveOrders(filtered);
+export async function deleteOrder(orderNumber: string): Promise<void> {
+  const { data, error } = await createClient()
+    .from('orders')
+    .delete()
+    .eq('order_number', orderNumber)
+    .select('order_number');
+  check(error);
+  requireRows(data);
 }
 
 // --- PRODUCTS ---
-export function getStoredProducts(): Product[] {
-  if (typeof window === 'undefined') return PRODUCTS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(PRODUCTS));
-      return PRODUCTS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : PRODUCTS;
-  } catch {
-    return PRODUCTS;
-  }
+export async function fetchProducts(): Promise<Product[]> {
+  const { data, error } = await createClient()
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false });
+  check(error);
+  return (data as ProductRow[]).map(rowToProduct);
 }
 
-export function saveStoredProducts(products: Product[]): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
-  window.dispatchEvent(new Event('zarina_products_updated'));
+export async function upsertProduct(product: Product): Promise<void> {
+  const { error } = await createClient().from('products').upsert(productToRow(product));
+  check(error);
+  await refreshStorefront();
 }
 
-export function upsertProduct(product: Product): void {
-  const current = getStoredProducts();
-  const index = current.findIndex((p) => p.id === product.id);
-  let updated: Product[];
-  if (index >= 0) {
-    updated = [...current];
-    updated[index] = product;
-  } else {
-    updated = [product, ...current];
-  }
-  saveStoredProducts(updated);
+export async function deleteStoredProduct(id: string): Promise<void> {
+  const { data, error } = await createClient().from('products').delete().eq('id', id).select('id');
+  check(error);
+  requireRows(data);
+  await refreshStorefront();
 }
 
-export function deleteStoredProduct(id: string): void {
-  const current = getStoredProducts();
-  const updated = current.filter((p) => p.id !== id);
-  saveStoredProducts(updated);
-}
-
-export function resetProductsToDefault(): void {
-  saveStoredProducts(PRODUCTS);
+/** Removes custom products and restores the 16 seed products to their original values. */
+export async function resetProductsToDefault(): Promise<void> {
+  const supabase = createClient();
+  const seedIds = PRODUCTS.map((p) => p.id);
+  const removed = await supabase.from('products').delete().not('id', 'in', `(${seedIds.join(',')})`);
+  check(removed.error);
+  const restored = await supabase.from('products').upsert(PRODUCTS.map(productToRow));
+  check(restored.error);
+  await refreshStorefront();
 }
 
 // --- SETTINGS ---
-export function getStoreSettings(): AdminSettings {
-  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+export async function fetchSettings(): Promise<AdminSettings> {
+  const { data, error } = await createClient().from('store_settings').select('data').maybeSingle();
+  check(error);
+  return { ...DEFAULT_SETTINGS, ...(data?.data ?? {}) };
 }
 
-export function saveStoreSettings(settings: Partial<AdminSettings>): void {
-  if (typeof window === 'undefined') return;
-  const current = getStoreSettings();
-  const updated = { ...current, ...settings };
-  localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
-  window.dispatchEvent(new Event('zarina_settings_updated'));
+export async function saveStoreSettings(settings: AdminSettings): Promise<void> {
+  const { error } = await createClient().from('store_settings').upsert({ id: true, data: settings });
+  check(error);
+  await refreshStorefront();
 }
