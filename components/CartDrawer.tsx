@@ -4,7 +4,8 @@ import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
-import { formatPKR } from '@/lib/shop-logic';
+import { formatPKR, cartItemLabel, maxQuantity } from '@/lib/shop-logic';
+import { lineUnitPrice } from '@/lib/pricing';
 import ProductImage from './ProductImage';
 
 export default function CartDrawer() {
@@ -156,12 +157,10 @@ export default function CartDrawer() {
                       </div>
 
                       {/* Options */}
-                      <div className="text-[11px] text-[#575757] space-y-0.5 mt-0.5">
-                        <p>Color: <span className="text-[#1F1F1F] font-medium">{item.selectedColor}</span></p>
-                        {item.selectedSize && (
-                          <p>Size: <span className="text-[#1F1F1F] font-medium">{item.selectedSize}</span></p>
-                        )}
-                      </div>
+                      <p className="text-[11px] text-[#575757] mt-0.5">
+                        <span className="text-[#1F1F1F] font-medium">{cartItemLabel(item)}</span>
+                        <span> • {formatPKR(lineUnitPrice(item))} each</span>
+                      </p>
                     </div>
 
                     {/* Quantity and Price */}
@@ -181,7 +180,8 @@ export default function CartDrawer() {
                         <button
                           type="button"
                           onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
-                          className="p-1 px-2 text-[#575757] hover:text-[#1F1F1F] transition-colors"
+                          disabled={item.quantity >= maxQuantity(item)}
+                          className="p-1 px-2 text-[#575757] hover:text-[#1F1F1F] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
                         >
                           <Plus className="w-3 h-3" />
@@ -190,7 +190,7 @@ export default function CartDrawer() {
 
                       <div className="text-right">
                         <span className="text-xs font-semibold text-[#1F1F1F]">
-                          {formatPKR(item.product.price * item.quantity)}
+                          {formatPKR(lineUnitPrice(item) * item.quantity)}
                         </span>
                       </div>
                     </div>

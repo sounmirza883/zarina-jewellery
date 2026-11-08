@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -20,7 +20,8 @@ import {
   FileText,
 } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
-import { formatPKR, isValidPakistaniPhone } from '@/lib/shop-logic';
+import { formatPKR, isValidPakistaniPhone, cartItemLabel } from '@/lib/shop-logic';
+import { lineUnitPrice } from '@/lib/pricing';
 import { createClient } from '@/lib/supabase/client';
 import { supabaseConfigured } from '@/lib/supabase/config';
 import { siteConfig } from '@/config/site';
@@ -69,6 +70,8 @@ export default function CheckoutPage() {
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors },
   } = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
@@ -84,6 +87,28 @@ export default function CheckoutPage() {
     },
   });
 
+  // Signed-in customers get their saved details pre-filled; guests and any failure are ignored.
+  useEffect(() => {
+    let cancelled = false;
+    import('@/lib/account')
+      .then(({ fetchMyProfile }) => fetchMyProfile())
+      .then((p) => {
+        if (cancelled || !p) return;
+        const fill = (name: 'fullName' | 'phone' | 'city' | 'address', value: string) => {
+          if (value && !getValues(name)) setValue(name, value);
+        };
+        fill('fullName', p.fullName);
+        fill('phone', p.phone);
+        fill('city', p.city);
+        fill('address', p.address);
+        if (siteConfig.provinces.includes(p.province)) setValue('province', p.province);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [getValues, setValue]);
+
   const onSubmit = async (data: CheckoutFormValues) => {
     if (items.length === 0) return;
 
@@ -98,12 +123,7 @@ export default function CheckoutPage() {
     try {
       // The server re-prices the bag, adds shipping and assigns the order number (place_order in supabase/schema.sql).
       const { data: placed, error } = await createClient().rpc('place_order', {
-        p_lines: items.map((i) => ({
-          productId: i.product.id,
-          quantity: i.quantity,
-          color: i.selectedColor,
-          size: i.selectedSize ?? null,
-        })),
+        p_lines: items.map((i) => ({ variantId: i.variantId ?? i.cartItemId, quantity: i.quantity })),
         p_customer: {
           fullName: data.fullName,
           phone: data.phone,
@@ -406,12 +426,11 @@ export default function CheckoutPage() {
                           {item.product.name}
                         </h4>
                         <p className="text-[11px] text-[#575757]">
-                          Qty: {item.quantity} • {item.selectedColor}
-                          {item.selectedSize ? ` (${item.selectedSize})` : ''}
+                          Qty: {item.quantity} • {cartItemLabel(item)}
                         </p>
                       </div>
                       <span className="text-xs font-semibold text-[#1F1F1F]">
-                        {formatPKR(item.product.price * item.quantity)}
+                        {formatPKR(lineUnitPrice(item) * item.quantity)}
                       </span>
                     </div>
                   ))}

@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck, ChevronRight } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
-import { formatPKR } from '@/lib/shop-logic';
+import { formatPKR, cartItemLabel, maxQuantity } from '@/lib/shop-logic';
+import { lineUnitPrice } from '@/lib/pricing';
 import ProductImage from '@/components/ProductImage';
 
 export default function CartPage() {
@@ -102,16 +103,13 @@ export default function CartPage() {
                           </h3>
                         </div>
                         <span className="text-sm sm:text-base font-semibold text-[#1F1F1F] sm:text-right">
-                          {formatPKR(item.product.price * item.quantity)}
+                          {formatPKR(lineUnitPrice(item) * item.quantity)}
                         </span>
                       </div>
 
                       <div className="mt-1 text-xs text-[#575757] flex flex-wrap gap-x-4 gap-y-1">
-                        <span>Color: <strong className="text-[#1F1F1F]">{item.selectedColor}</strong></span>
-                        {item.selectedSize && (
-                          <span>Size: <strong className="text-[#1F1F1F]">{item.selectedSize}</strong></span>
-                        )}
-                        <span>Unit: {formatPKR(item.product.price)}</span>
+                        <span>Option: <strong className="text-[#1F1F1F]">{cartItemLabel(item)}</strong></span>
+                        <span>Unit: {formatPKR(lineUnitPrice(item))}</span>
                       </div>
 
                       {/* Stepper & Remove */}
@@ -131,7 +129,8 @@ export default function CartPage() {
                           <button
                             type="button"
                             onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
-                            className="px-2.5 py-1 text-[#575757] hover:text-[#1F1F1F]"
+                            disabled={item.quantity >= maxQuantity(item)}
+                            className="px-2.5 py-1 text-[#575757] hover:text-[#1F1F1F] disabled:opacity-40 disabled:cursor-not-allowed"
                             aria-label="Increase quantity"
                           >
                             <Plus className="w-3.5 h-3.5" />

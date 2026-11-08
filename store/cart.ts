@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Product, CartItem } from '@/types/product';
-import { getCartItemId, calculateCartTotals } from '@/lib/shop-logic';
+import { Product, ProductVariant, CartItem } from '@/types/product';
+import { calculateCartTotals, maxQuantity, MAX_PER_ITEM } from '@/lib/shop-logic';
+import { variantLabel, variantPrice } from '@/lib/pricing';
 import { siteConfig } from '@/config/site';
 
 interface CartState {
@@ -15,7 +16,7 @@ interface CartState {
 
   // Actions
   setShipping: (flatRate: number, freeShippingThreshold: number) => void;
-  addItem: (product: Product, quantity?: number, selectedColor?: string, selectedSize?: string) => void;
+  addItem: (product: Product, variant: ProductVariant, quantity?: number) => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -54,40 +55,41 @@ export const useCartStore = create<CartState>()(
       setShipping: (flatRate, freeShippingThreshold) =>
         set({ shipping: { flatRate, freeShippingThreshold } }),
 
-      addItem: (product, quantity = 1, selectedColor, selectedSize) => {
-        const color = selectedColor || product.colors[0] || 'Default';
-        const size = selectedSize || (product.sizes ? product.sizes[0] : undefined);
-        const cartItemId = getCartItemId(product.id, color, size);
+      addItem: (product, variant, quantity = 1) => {
+        if (variant.stockQty <= 0) {
+          set({ toastMessage: `"${product.name}" is out of stock` });
+          return;
+        }
 
         set((state) => {
-          const existingIndex = state.items.findIndex((item) => item.cartItemId === cartItemId);
-          let newItems: CartItem[];
-          let newItem: CartItem;
+          const existing = state.items.find((item) => item.cartItemId === variant.id);
+          const wanted = (existing?.quantity ?? 0) + quantity;
+          const capped = Math.min(wanted, variant.stockQty, MAX_PER_ITEM);
 
-          if (existingIndex > -1) {
-            newItems = [...state.items];
-            const current = newItems[existingIndex];
-            newItem = {
-              ...current,
-              quantity: current.quantity + quantity,
-            };
-            newItems[existingIndex] = newItem;
-          } else {
-            newItem = {
-              cartItemId,
-              product,
-              quantity,
-              selectedColor: color,
-              selectedSize: size,
-            };
-            newItems = [...state.items, newItem];
-          }
+          const newItem: CartItem = existing
+            ? { ...existing, quantity: capped }
+            : {
+                cartItemId: variant.id,
+                variantId: variant.id,
+                sku: variant.sku ?? undefined,
+                variantLabel: variantLabel(variant),
+                unitPrice: variantPrice(variant),
+                product,
+                quantity: capped,
+                selectedColor: variant.color,
+                selectedSize: variant.size || undefined,
+              };
 
           return {
-            items: newItems,
+            items: existing
+              ? state.items.map((item) => (item === existing ? newItem : item))
+              : [...state.items, newItem],
             isDrawerOpen: true,
             lastAddedItem: newItem,
-            toastMessage: `Added "${product.name}" to your bag`,
+            toastMessage:
+              capped < wanted
+                ? `Only ${capped} available for "${product.name}"`
+                : `Added "${product.name}" to your bag`,
           };
         });
       },
@@ -111,7 +113,9 @@ export const useCartStore = create<CartState>()(
           }
           return {
             items: state.items.map((item) =>
-              item.cartItemId === cartItemId ? { ...item, quantity } : item
+              item.cartItemId === cartItemId
+                ? { ...item, quantity: Math.min(quantity, maxQuantity(item)) }
+                : item
             ),
           };
         });
@@ -136,6 +140,10 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: 'zarina_jewels_cart_v1',
+      // Version 2 keys bag lines by variant id; bags saved before that cannot be converted, so they are dropped once.
+      version: 2,
+      migrate: (persisted, version) =>
+        version < 2 ? { items: [] } : (persisted as { items: CartItem[] }),
       storage: createJSONStorage(() => {
         if (typeof window !== 'undefined') {
           return localStorage;
