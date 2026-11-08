@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rowToProduct, rowToOrder, type ProductRow, type OrderRow } from './mappers';
+import { rowToProduct, rowToOrder, rowToCoupon, type ProductRow, type OrderRow } from './mappers';
 
 const productRow = (o: Partial<ProductRow> = {}): ProductRow => ({
   id: 'zj-1',
@@ -71,6 +71,8 @@ test('rowToOrder maps the snake_case row to the app order', () => {
     status: 'Dispatched',
     created_at: '2026-11-01T10:00:00Z',
     user_id: null,
+    discount: 0,
+    coupon_code: null,
   };
   const o = rowToOrder(row);
   assert.equal(o.orderNumber, 'ZJ-123456');
@@ -78,4 +80,35 @@ test('rowToOrder maps the snake_case row to the app order', () => {
   assert.equal(o.createdAt, '2026-11-01T10:00:00Z');
   assert.equal(o.paymentMethod, 'Cash on Delivery');
   assert.equal(o.userId, null);
+  assert.equal(o.discount, 0);
+  assert.equal(o.couponCode, null);
+
+  const withCoupon = rowToOrder({ ...row, subtotal: 2000, discount: 200, coupon_code: 'SAVE10', total: 2050 });
+  assert.equal(withCoupon.discount, 200);
+  assert.equal(withCoupon.couponCode, 'SAVE10');
+});
+
+test('rowToCoupon maps the row and turns nulls into missing optional fields', () => {
+  const c = rowToCoupon({
+    code: 'RINGS500',
+    kind: 'fixed',
+    value: 500,
+    categories: ['rings'],
+    min_subtotal: 3000,
+    include_sale_items: false,
+    starts_at: null,
+    expires_at: '2026-12-01T00:00:00Z',
+    usage_limit: null,
+    once_per_customer: true,
+    active: true,
+    created_at: '2026-11-01T00:00:00Z',
+  });
+  assert.equal(c.code, 'RINGS500');
+  assert.deepEqual(c.categories, ['rings']);
+  assert.equal(c.minSubtotal, 3000);
+  assert.equal(c.includeSaleItems, false);
+  assert.equal(c.startsAt, undefined);
+  assert.equal(c.expiresAt, '2026-12-01T00:00:00Z');
+  assert.equal(c.usageLimit, undefined);
+  assert.equal(c.oncePerCustomer, true);
 });

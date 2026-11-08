@@ -1,4 +1,5 @@
 import type {
+  Coupon,
   Order,
   OrderStatus,
   Product,
@@ -65,6 +66,23 @@ export interface OrderRow {
   status: OrderStatus;
   created_at: string;
   user_id: string | null;
+  discount: number;
+  coupon_code: string | null;
+}
+
+export interface CouponRow {
+  code: string;
+  kind: Coupon['kind'];
+  value: number;
+  categories: Coupon['categories'];
+  min_subtotal: number;
+  include_sale_items: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  usage_limit: number | null;
+  once_per_customer: boolean;
+  active: boolean;
+  created_at: string;
 }
 
 export interface ReviewRow {
@@ -144,6 +162,23 @@ export const rowToOrder = (r: OrderRow): Order => ({
   paymentMethod: 'Cash on Delivery',
   status: r.status,
   userId: r.user_id,
+  discount: r.discount ?? 0,
+  couponCode: r.coupon_code,
+});
+
+export const rowToCoupon = (r: CouponRow): Coupon => ({
+  code: r.code,
+  kind: r.kind,
+  value: r.value,
+  categories: r.categories ?? [],
+  minSubtotal: r.min_subtotal,
+  includeSaleItems: r.include_sale_items,
+  startsAt: r.starts_at ?? undefined,
+  expiresAt: r.expires_at ?? undefined,
+  usageLimit: r.usage_limit ?? undefined,
+  oncePerCustomer: r.once_per_customer,
+  active: r.active,
+  createdAt: r.created_at,
 });
 
 export const rowToReview = (r: ReviewRow): Review => ({

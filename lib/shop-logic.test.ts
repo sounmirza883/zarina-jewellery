@@ -48,6 +48,37 @@ test('calculateCartTotals prices a line by its variant price, falling back to th
   assert.equal(calculateCartTotals([onSale, legacy], 250, 3500).subtotal, 3900);
 });
 
+test('calculateCartTotals takes a coupon discount off the items, not off delivery', () => {
+  const items = [makeItem({ unitPrice: 2000, quantity: 1 })];
+  const totals = calculateCartTotals(items, 250, 3500, { discount: 500, freeShipping: false });
+  assert.equal(totals.subtotal, 2000);
+  assert.equal(totals.discount, 500);
+  assert.equal(totals.shipping, 250);
+  assert.equal(totals.total, 1750);
+});
+
+test('calculateCartTotals keeps free delivery decided on the bag total before the coupon', () => {
+  const items = [makeItem({ unitPrice: 3600, quantity: 1 })]; // above 3500
+  const totals = calculateCartTotals(items, 250, 3500, { discount: 1000, freeShipping: false });
+  assert.equal(totals.shipping, 0);
+  assert.equal(totals.isFreeShipping, true);
+  assert.equal(totals.total, 2600);
+});
+
+test('calculateCartTotals removes delivery for a free-delivery coupon and caps the discount at the subtotal', () => {
+  const items = [makeItem({ unitPrice: 1000, quantity: 1 })];
+  const free = calculateCartTotals(items, 250, 3500, { discount: 0, freeShipping: true });
+  assert.equal(free.shipping, 0);
+  assert.equal(free.isFreeShipping, true);
+  assert.equal(free.total, 1000);
+  assert.equal(calculateCartTotals(items, 250, 3500, { discount: 9999, freeShipping: false }).discount, 1000);
+  assert.equal(calculateCartTotals([], 250, 3500, { discount: 500, freeShipping: true }).total, 0);
+});
+
+test('calculateCartTotals without a coupon has no discount', () => {
+  assert.equal(calculateCartTotals([makeItem({ unitPrice: 2000, quantity: 1 })], 250, 3500).discount, 0);
+});
+
 test('isValidPakistaniPhone validates standard Pakistani phone numbers correctly', () => {
   assert.equal(isValidPakistaniPhone('03001234567'), true);
   assert.equal(isValidPakistaniPhone('0300-1234567'), true);

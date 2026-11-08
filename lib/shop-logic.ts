@@ -13,14 +13,18 @@ export function formatPKR(amount: number): string {
 }
 
 /**
- * Calculates cart subtotal, shipping cost, and grand total.
+ * Calculates cart subtotal, coupon discount, shipping cost, and grand total.
+ * The free-delivery threshold looks at the subtotal before the coupon, like place_order does.
+ * The coupon amounts come from validate_coupon; the server recalculates them when the order is placed.
  */
 export function calculateCartTotals(
   items: CartItem[],
   flatShipping: number = 250,
-  freeShippingThreshold: number = 3500
+  freeShippingThreshold: number = 3500,
+  coupon?: { discount: number; freeShipping: boolean }
 ): {
   subtotal: number;
+  discount: number;
   shipping: number;
   total: number;
   freeShippingRemaining: number;
@@ -31,16 +35,19 @@ export function calculateCartTotals(
     (acc, item) => acc + lineUnitPrice(item) * item.quantity,
     0
   );
-  
+
   const totalItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
 
-  const isFreeShipping = subtotal >= freeShippingThreshold && items.length > 0;
-  const shipping = items.length === 0 ? 0 : isFreeShipping ? 0 : flatShipping;
-  const total = subtotal + shipping;
+  const hasItems = items.length > 0;
+  const isFreeShipping = hasItems && (subtotal >= freeShippingThreshold || !!coupon?.freeShipping);
+  const shipping = hasItems && !isFreeShipping ? flatShipping : 0;
+  const discount = hasItems ? Math.min(Math.max(0, coupon?.discount ?? 0), subtotal) : 0;
+  const total = subtotal - discount + shipping;
   const freeShippingRemaining = Math.max(0, freeShippingThreshold - subtotal);
 
   return {
     subtotal,
+    discount,
     shipping,
     total,
     freeShippingRemaining,

@@ -100,6 +100,38 @@ export interface Order {
   paymentMethod: 'Cash on Delivery';
   status: OrderStatus;
   userId?: string | null;
+  /** Rupees taken off the items by a coupon (0 or missing when none was used). */
+  discount?: number;
+  couponCode?: string | null;
+}
+
+export type CouponKind = 'percent' | 'fixed' | 'free_shipping';
+
+export interface Coupon {
+  code: string;
+  kind: CouponKind;
+  /** percent: 1-100, fixed: rupees, free_shipping: 0 */
+  value: number;
+  /** Empty = every category. */
+  categories: ProductCategory[];
+  /** Minimum spend on the eligible items. */
+  minSubtotal: number;
+  includeSaleItems: boolean;
+  startsAt?: string;
+  expiresAt?: string;
+  usageLimit?: number;
+  oncePerCustomer: boolean;
+  active: boolean;
+  createdAt: string;
+}
+
+/** What validate_coupon returns for the checkout page. */
+export interface CouponPreview {
+  code: string;
+  kind: CouponKind;
+  value: number;
+  discount: number;
+  freeShipping: boolean;
 }
 
 export interface Review {

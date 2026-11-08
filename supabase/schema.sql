@@ -12,7 +12,8 @@
 --   product_variants  colour/size combinations with SKU, price, stock, image
 --   reviews           customer reviews, hidden until the admin approves them
 --   profiles          customer accounts (name, phone, saved address)
---   orders            + customer link
+--   orders            + customer link, coupon discount
+--   coupons           discount coupons (percent, fixed amount, free delivery)
 --   store_settings    shipping rules, announcement bar
 --   product-images    Storage bucket for admin image uploads
 --
@@ -34,6 +35,7 @@
 --
 -- Access model
 --   products, product_variants, store_settings   public read, admin write
+--   coupons           admin only; customers check a code with validate_coupon()
 --   reviews           public sees approved ones only; visitors add reviews through
 --                     submit_review(); admin approves or deletes
 --   orders            visitors have NO direct access: they place orders through
@@ -42,7 +44,8 @@
 --   profiles          each customer reads/edits only their own row
 --
 -- Calls the app makes
---   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...} })
+--   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...}, p_coupon })  -- p_coupon optional
+--   rpc('validate_coupon', { p_code, p_lines: [{ variantId, quantity }] })   -- checkout preview
 --   rpc('submit_review', { p_product_id, p_rating, p_author, p_title, p_body, p_hp })
 --   rpc('save_product',  { p_product: {...}, p_variants: [...] })      -- admin only
 -- place_order also still accepts the older { productId, color, size, quantity } lines.
@@ -88,8 +91,7 @@ create table if not exists public.orders (
   payment_method text not null default 'Cash on Delivery',
   status         text not null default 'Pending Phone Confirmation'
                  check (status in ('Pending Phone Confirmation', 'Confirmed', 'Dispatched', 'Delivered', 'Cancelled')),
-  created_at     timestamptz not null default now(),
-  check (total = subtotal + shipping)
+  created_at     timestamptz not null default now()
 );
 
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
@@ -270,14 +272,52 @@ create table if not exists public.profiles (
 
 
 -- ---------------------------------------------------------------------
--- 8. Orders: link to the customer account
+-- 8. Orders: link to the customer account, coupon discount, and the coupons table
 -- ---------------------------------------------------------------------
 
 alter table public.orders
-  add column if not exists user_id uuid references auth.users (id) on delete set null;
+  add column if not exists user_id     uuid references auth.users (id) on delete set null,
+  add column if not exists discount    integer not null default 0 check (discount >= 0),
+  add column if not exists coupon_code text;
 
 create index if not exists orders_user_idx
   on public.orders (user_id, created_at desc) where user_id is not null;
+
+create index if not exists orders_coupon_idx
+  on public.orders (coupon_code) where coupon_code is not null;
+
+-- total = items - coupon discount + delivery. orders_check is the older rule without a discount.
+alter table public.orders drop constraint if exists orders_check;
+alter table public.orders drop constraint if exists orders_total_check;
+alter table public.orders
+  add constraint orders_total_check check (discount <= subtotal and total = subtotal - discount + shipping);
+
+-- Discount coupons (admin only; customers use them through validate_coupon() and place_order()).
+--   kind   percent       value = 1..100 (% off the eligible items)
+--          fixed         value = rupees off the eligible items
+--          free_shipping value = 0 (delivery charge removed)
+--   categories  empty = every category; otherwise only items in these categories count
+--   include_sale_items  false = items that already show a sale price are left out
+-- Uses are counted from non-cancelled orders, so a cancelled order gives its use back.
+create table if not exists public.coupons (
+  code               text primary key check (code ~ '^[A-Z0-9_-]{3,20}$'),
+  kind               text not null check (kind in ('percent', 'fixed', 'free_shipping')),
+  value              integer not null default 0 check (value >= 0),
+  categories         text[] not null default '{}'
+                     check (categories <@ array['earrings', 'necklaces', 'rings', 'bracelets']::text[]),
+  min_subtotal       integer not null default 0 check (min_subtotal >= 0),
+  include_sale_items boolean not null default true,
+  starts_at          timestamptz,
+  expires_at         timestamptz,
+  usage_limit        integer check (usage_limit is null or usage_limit >= 1),
+  once_per_customer  boolean not null default false,
+  active             boolean not null default true,
+  created_at         timestamptz not null default now(),
+  check ((kind = 'percent' and value between 1 and 100)
+      or (kind = 'fixed' and value >= 1)
+      or (kind = 'free_shipping' and value = 0)),
+  check (starts_at is null or expires_at is null or expires_at > starts_at)
+);
 
 
 -- ---------------------------------------------------------------------
@@ -571,15 +611,178 @@ create trigger orders_restock_delete_trg
 
 
 -- ---------------------------------------------------------------------
--- 13. Place an order (the only way a visitor can write to `orders`)
+-- 13a. Coupons: work out the discount for a bag
 --
--- Prices, stock, shipping and the order number are decided here, never by the
--- browser. SECURITY DEFINER runs as the table owner, so it can insert and
--- change stock even though visitors have no such rights on those tables.
--- Lines: [{ variantId, quantity }]  (the older { productId, color, size, quantity } also works)
+-- p_lines: one entry per priced bag line, [{ "category": "rings", "amount": 3000, "onSale": false }]
+--          where amount = unit price x quantity. Callers build it from the database, never the browser.
+-- Unknown, disabled and malformed codes all give the same message so codes cannot be probed.
+-- p_lock = true locks the coupon row (place_order) so two orders cannot both take the last use.
+-- Returns { code, kind, value, discount, freeShipping }.
 -- ---------------------------------------------------------------------
 
-create or replace function public.place_order(p_lines jsonb, p_customer jsonb)
+create or replace function public.coupon_discount(
+  p_code  text,
+  p_lines jsonb,
+  p_phone text,
+  p_uid   uuid,
+  p_lock  boolean
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_code text := upper(trim(coalesce(p_code, '')));
+  v_c    public.coupons;
+  v_now  timestamptz := now();
+  v_elig integer;
+  v_disc integer;
+  v_key  text;
+  v_used integer;
+begin
+  if v_code !~ '^[A-Z0-9_-]{3,20}$' then
+    raise exception 'This coupon code is not valid.';
+  end if;
+
+  if p_lock then
+    select * into v_c from public.coupons c where c.code = v_code for update;
+  else
+    select * into v_c from public.coupons c where c.code = v_code;
+  end if;
+
+  if not found or not v_c.active then
+    raise exception 'This coupon code is not valid.';
+  end if;
+  if v_c.starts_at is not null and v_now < v_c.starts_at then
+    raise exception 'This coupon is not active yet.';
+  end if;
+  if v_c.expires_at is not null and v_now >= v_c.expires_at then
+    raise exception 'This coupon has expired.';
+  end if;
+
+  -- Items the coupon applies to: right category, and not on sale unless the coupon allows it.
+  select coalesce(sum((l ->> 'amount')::integer), 0)::integer
+    into v_elig
+    from jsonb_array_elements(p_lines) l
+   where (cardinality(v_c.categories) = 0 or (l ->> 'category') = any (v_c.categories))
+     and (v_c.include_sale_items or not coalesce((l ->> 'onSale')::boolean, false));
+
+  if v_elig <= 0 then
+    raise exception 'This coupon does not apply to the items in your bag.';
+  end if;
+  if v_elig < v_c.min_subtotal then
+    raise exception 'Spend at least Rs. % on eligible items to use this coupon.', v_c.min_subtotal;
+  end if;
+
+  if v_c.usage_limit is not null then
+    select count(*) into v_used
+      from public.orders o
+     where o.coupon_code = v_c.code and o.status <> 'Cancelled';
+    if v_used >= v_c.usage_limit then
+      raise exception 'This coupon has been fully used.';
+    end if;
+  end if;
+
+  -- Once per customer: the same account, or the same phone number (last 10 digits; guests have no account).
+  if v_c.once_per_customer then
+    v_key := right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 10);
+    if exists (
+      select 1
+        from public.orders o
+       where o.coupon_code = v_c.code
+         and o.status <> 'Cancelled'
+         and ((p_uid is not null and o.user_id = p_uid)
+              or (length(v_key) = 10
+                  and right(regexp_replace(coalesce(o.customer ->> 'phone', ''), '[^0-9]', '', 'g'), 10) = v_key))
+    ) then
+      raise exception 'You have already used this coupon.';
+    end if;
+  end if;
+
+  v_disc := case v_c.kind
+              when 'percent' then floor(v_elig * v_c.value / 100.0)::integer
+              when 'fixed'   then least(v_c.value, v_elig)
+              else 0
+            end;
+
+  return jsonb_build_object(
+    'code',         v_c.code,
+    'kind',         v_c.kind,
+    'value',        v_c.value,
+    'discount',     v_disc,
+    'freeShipping', v_c.kind = 'free_shipping'
+  );
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 13b. Preview a coupon for the checkout page (no stock is touched)
+--      Lines: [{ variantId, quantity }]. The phone number is not known yet, so the
+--      once-per-customer check here uses the account only; place_order checks the phone too.
+-- ---------------------------------------------------------------------
+
+create or replace function public.validate_coupon(p_code text, p_lines jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_line  jsonb;
+  v_vid   text;
+  v_qty   integer;
+  v_var   public.product_variants;
+  v_cat   text;
+  v_items jsonb := '[]'::jsonb;
+begin
+  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 1 and 30 then
+    raise exception 'Your bag is empty.';
+  end if;
+
+  for v_line in select * from jsonb_array_elements(p_lines) loop
+    if jsonb_typeof(v_line) is distinct from 'object' or coalesce(v_line ->> 'quantity', '') !~ '^[0-9]{1,2}$' then
+      raise exception 'An item in your bag is invalid.';
+    end if;
+    v_qty := (v_line ->> 'quantity')::integer;
+    if v_qty not between 1 and 20 then
+      raise exception 'Quantity must be between 1 and 20 per item.';
+    end if;
+
+    v_vid := nullif(trim(coalesce(v_line ->> 'variantId', '')), '');
+    select * into v_var from public.product_variants v where v.id = v_vid and v.active;
+    if not found then
+      raise exception 'An item in your bag is no longer available.';
+    end if;
+
+    select p.category into v_cat from public.products p where p.id = v_var.product_id;
+    v_items := v_items || jsonb_build_array(jsonb_build_object(
+      'category', v_cat,
+      'amount',   coalesce(v_var.sale_price, v_var.regular_price) * v_qty,
+      'onSale',   v_var.sale_price is not null
+    ));
+  end loop;
+
+  return public.coupon_discount(p_code, v_items, null, auth.uid(), false);
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------
+-- 13. Place an order (the only way a visitor can write to `orders`)
+--
+-- Prices, stock, shipping, the coupon discount and the order number are decided here,
+-- never by the browser. SECURITY DEFINER runs as the table owner, so it can insert and
+-- change stock even though visitors have no such rights on those tables.
+-- Lines: [{ variantId, quantity }]  (the older { productId, color, size, quantity } also works)
+-- p_coupon (optional): a coupon code; an invalid or used-up code stops the order with a message.
+-- ---------------------------------------------------------------------
+
+-- The two-argument version is replaced by the one below (p_coupon defaults to null, so old callers still work).
+drop function if exists public.place_order(jsonb, jsonb);
+
+create or replace function public.place_order(p_lines jsonb, p_customer jsonb, p_coupon text default null)
 returns jsonb
 language plpgsql
 security definer
@@ -614,6 +817,9 @@ declare
   v_flat    integer;
   v_free    integer;
   v_ship    integer;
+  v_elig    jsonb := '[]'::jsonb;
+  v_cpn     jsonb;
+  v_disc    integer := 0;
   v_num     text;
   v_now     timestamptz := now();
   v_uid     uuid := auth.uid();
@@ -795,6 +1001,13 @@ begin
       'selectedSize',  nullif(v_var.size, '')
     )));
     v_sub := v_sub + v_unit * v_row.qty;
+
+    -- What a coupon needs to know about this line.
+    v_elig := v_elig || jsonb_build_array(jsonb_build_object(
+      'category', v_prod.category,
+      'amount',   v_unit * v_row.qty,
+      'onSale',   v_var.sale_price is not null
+    ));
   end loop;
 
   -- Back to the order the customer had in their bag.
@@ -806,14 +1019,24 @@ begin
   select s.data into v_cfg from public.store_settings s limit 1;
   v_flat := coalesce(round((v_cfg ->> 'flatShippingRate')::numeric)::integer, 250);
   v_free := coalesce(round((v_cfg ->> 'freeShippingThreshold')::numeric)::integer, 3500);
+  -- Free delivery is decided on the bag total before any coupon, so a coupon never removes it.
   v_ship := case when v_sub >= v_free then 0 else v_flat end;
+
+  -- ---- coupon (an invalid code stops the whole order, nothing is silently skipped) ----
+  if nullif(trim(coalesce(p_coupon, '')), '') is not null then
+    v_cpn  := public.coupon_discount(p_coupon, v_elig, v_phone, v_uid, true);
+    v_disc := (v_cpn ->> 'discount')::integer;
+    if (v_cpn ->> 'freeShipping')::boolean then
+      v_ship := 0;
+    end if;
+  end if;
 
   -- ---- save, retrying on the rare order-number collision ----
   loop
     v_num := 'ZJ-' || (100000 + floor(random() * 900000)::integer)::text;
     begin
-      insert into public.orders (order_number, items, subtotal, shipping, total, customer, created_at, user_id)
-      values (v_num, v_items, v_sub, v_ship, v_sub + v_ship, v_clean, v_now, v_uid);
+      insert into public.orders (order_number, items, subtotal, discount, coupon_code, shipping, total, customer, created_at, user_id)
+      values (v_num, v_items, v_sub, v_disc, v_cpn ->> 'code', v_ship, v_sub - v_disc + v_ship, v_clean, v_now, v_uid);
       exit;
     exception when unique_violation then
       null;
@@ -824,8 +1047,10 @@ begin
     'orderNumber',   v_num,
     'items',         v_items,
     'subtotal',      v_sub,
+    'discount',      v_disc,
+    'couponCode',    v_cpn ->> 'code',
     'shipping',      v_ship,
-    'total',         v_sub + v_ship,
+    'total',         v_sub - v_disc + v_ship,
     'customer',      v_clean,
     'createdAt',     v_now,
     'paymentMethod', 'Cash on Delivery',
@@ -1154,6 +1379,7 @@ alter table public.product_variants enable row level security;
 alter table public.reviews          enable row level security;
 alter table public.profiles         enable row level security;
 alter table public.orders           enable row level security;
+alter table public.coupons          enable row level security;
 alter table public.store_settings   enable row level security;
 
 -- products
@@ -1211,6 +1437,13 @@ drop policy if exists orders_owner_read on public.orders;
 create policy orders_owner_read on public.orders
   for select to authenticated using (user_id = (select auth.uid()));
 
+-- coupons: admin only. Customers never read the table, so codes cannot be listed.
+drop policy if exists coupons_admin_all on public.coupons;
+create policy coupons_admin_all on public.coupons
+  for all to authenticated
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));
+
 -- store_settings
 drop policy if exists settings_read on public.store_settings;
 create policy settings_read on public.store_settings
@@ -1228,7 +1461,7 @@ create policy settings_admin_write on public.store_settings
 -- ---------------------------------------------------------------------
 
 revoke all on public.products, public.product_variants, public.reviews, public.profiles,
-              public.orders, public.store_settings
+              public.orders, public.coupons, public.store_settings
   from anon, authenticated;
 
 grant select on public.products, public.product_variants, public.store_settings to anon, authenticated;
@@ -1243,9 +1476,12 @@ grant update, delete on public.reviews to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 
 grant select, update, delete on public.orders to authenticated;
+grant select, insert, update, delete on public.coupons to authenticated;
 
 -- Functions. Supabase grants EXECUTE to anon/authenticated by default, so reset each one.
-revoke all on function public.place_order(jsonb, jsonb)                              from public, anon, authenticated;
+revoke all on function public.place_order(jsonb, jsonb, text)                        from public, anon, authenticated;
+revoke all on function public.validate_coupon(text, jsonb)                           from public, anon, authenticated;
+revoke all on function public.coupon_discount(text, jsonb, text, uuid, boolean)      from public, anon, authenticated;
 revoke all on function public.submit_review(text, integer, text, text, text, text)   from public, anon, authenticated;
 revoke all on function public.save_product(jsonb, jsonb)                             from public, anon, authenticated;
 revoke all on function public.product_json(public.products)                          from public, anon, authenticated;
@@ -1257,7 +1493,8 @@ revoke all on function public.handle_new_user()                                 
 revoke all on function public.profiles_touch()                                       from public, anon, authenticated;
 revoke all on function public.orders_restock()                                       from public, anon, authenticated;
 
-grant execute on function public.place_order(jsonb, jsonb)                            to anon, authenticated;
+grant execute on function public.place_order(jsonb, jsonb, text)                      to anon, authenticated;
+grant execute on function public.validate_coupon(text, jsonb)                         to anon, authenticated;
 grant execute on function public.submit_review(text, integer, text, text, text, text) to anon, authenticated;
 grant execute on function public.save_product(jsonb, jsonb)                           to authenticated;
 grant execute on function public.jsonb_text_array(jsonb)                              to authenticated;
