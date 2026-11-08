@@ -14,7 +14,9 @@ import {
   Calendar,
 } from 'lucide-react';
 import { Order } from '@/types/product';
-import { formatPKR } from '@/lib/shop-logic';
+import { formatPKR, cartItemLabel } from '@/lib/shop-logic';
+import { lineUnitPrice } from '@/lib/pricing';
+import OrderPdfButton from '@/components/OrderPdfButton';
 import { siteConfig } from '@/config/site';
 import ProductImage from '@/components/ProductImage';
 
@@ -124,12 +126,11 @@ function OrderSuccessContent() {
                       {item.product.name}
                     </h3>
                     <p className="text-[11px] text-[#575757]">
-                      Qty: {item.quantity} • {item.selectedColor}
-                      {item.selectedSize ? ` (${item.selectedSize})` : ''}
+                      Qty: {item.quantity} • {cartItemLabel(item)}
                     </p>
                   </div>
                   <span className="text-xs sm:text-sm font-semibold text-[#1F1F1F]">
-                    {formatPKR(item.product.price * item.quantity)}
+                    {formatPKR(lineUnitPrice(item) * item.quantity)}
                   </span>
                 </div>
               ))}
@@ -177,10 +178,25 @@ function OrderSuccessContent() {
         )}
 
         {/* Action Button */}
-        <div className="mt-8 text-center">
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+          {order && (
+            <OrderPdfButton
+              order={order}
+              variant="customer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-[#0B0D12] text-[#0B0D12] hover:bg-[#FAF7F2] text-xs uppercase tracking-widest font-semibold rounded transition-colors w-full sm:w-auto"
+              label="Download Order PDF"
+            />
+          )}
+          <Link
+            href={`/track-order?order=${encodeURIComponent(activeOrderNumber)}`}
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-[#0B0D12] text-[#0B0D12] hover:bg-[#FAF7F2] text-xs uppercase tracking-widest font-semibold rounded transition-colors w-full sm:w-auto"
+          >
+            <Truck className="w-4 h-4" />
+            <span>Track This Order</span>
+          </Link>
           <Link
             href="/shop"
-            className="inline-flex items-center gap-2 px-8 py-3 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs uppercase tracking-widest font-semibold rounded transition-colors shadow"
+            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs uppercase tracking-widest font-semibold rounded transition-colors shadow w-full sm:w-auto"
           >
             <span>Continue Shopping</span>
             <ArrowRight className="w-4 h-4" />
