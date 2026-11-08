@@ -16,7 +16,9 @@ import {
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
+import { AnimatePresence, m } from 'motion/react';
 import { useSignedIn } from '@/lib/account';
+import { EASE_OUT } from './motion/timing';
 
 function subscribe() {
   return () => {};
@@ -46,7 +48,7 @@ export default function MobileMenuDrawer() {
     };
   }, [isMobileMenuOpen]);
 
-  if (!isMounted || !isMobileMenuOpen) return null;
+  if (!isMounted) return null;
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,17 +82,27 @@ export default function MobileMenuDrawer() {
   ];
 
   const content = (
-    <div className="fixed inset-0 z-50 flex">
+    <AnimatePresence>
+      {isMobileMenuOpen && (
+    <div key="mobile-menu" className="fixed inset-0 z-50 flex">
       {/* Dimmed Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity duration-300"
+      <m.div
+        className="fixed inset-0 bg-black/70 backdrop-blur-xs"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
         onClick={closeMobileMenu}
         aria-hidden="true"
       />
 
       {/* Side Drawer Panel (Sliding in from the Left, Full Viewport Height) */}
-      <div
-        className="relative w-80 max-w-[85vw] h-full bg-[#FAF7F2] shadow-2xl border-r border-[#B8893B]/30 flex flex-col justify-between overflow-hidden animate-in slide-in-from-left duration-300 z-50 text-[#1F1F1F]"
+      <m.div
+        initial={{ x: '-100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '-100%' }}
+        transition={{ duration: 0.3, ease: EASE_OUT }}
+        className="relative w-80 max-w-[85vw] h-full bg-[#FAF7F2] shadow-2xl border-r border-[#B8893B]/30 flex flex-col justify-between overflow-hidden z-50 text-[#1F1F1F]"
         role="dialog"
         aria-modal="true"
         aria-label="Navigation Menu"
@@ -202,8 +214,10 @@ export default function MobileMenuDrawer() {
             </span>
           </div>
         </div>
-      </div>
+      </m.div>
     </div>
+      )}
+    </AnimatePresence>
   );
 
   return createPortal(content, document.body);

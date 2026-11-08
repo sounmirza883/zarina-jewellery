@@ -6,7 +6,9 @@ import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck } from 'lu
 import { useCartStore } from '@/store/cart';
 import { formatPKR, cartItemLabel, maxQuantity } from '@/lib/shop-logic';
 import { lineUnitPrice } from '@/lib/pricing';
+import { AnimatePresence, m } from 'motion/react';
 import ProductImage from './ProductImage';
+import { EASE_OUT } from './motion/timing';
 
 export default function CartDrawer() {
   const {
@@ -41,21 +43,29 @@ export default function CartDrawer() {
   const freeThreshold = useCartStore((s) => s.shipping.freeShippingThreshold);
   const progressPercent = Math.min(100, Math.round((totals.subtotal / freeThreshold) * 100));
 
-  if (!isDrawerOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <AnimatePresence>
+      {isDrawerOpen && (
+    <div key="cart-drawer" className="fixed inset-0 z-50 overflow-hidden">
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-300"
+      <m.div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
         onClick={closeDrawer}
         aria-hidden="true"
       />
 
-      {/* Drawer Panel */}
+      {/* Drawer Panel: slides in from the right */}
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <div
+        <m.div
           ref={drawerRef}
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ duration: 0.3, ease: EASE_OUT }}
           className="w-screen max-w-md bg-[#FAF7F2] shadow-2xl flex flex-col border-l border-[#B8893B]/20 text-[#1F1F1F]"
           role="dialog"
           aria-modal="true"
@@ -244,8 +254,10 @@ export default function CartDrawer() {
               </div>
             </div>
           )}
-        </div>
+        </m.div>
       </div>
     </div>
+      )}
+    </AnimatePresence>
   );
 }
