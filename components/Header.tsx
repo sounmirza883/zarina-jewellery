@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { signOut, useSignedIn } from '@/lib/account';
 import MobileMenuDrawer from './MobileMenuDrawer';
 import NavMenu from './NavMenu';

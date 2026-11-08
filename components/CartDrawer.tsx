@@ -6,7 +6,8 @@ import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck } from 'lu
 import { useCartStore } from '@/store/cart';
 import { formatPKR, cartItemLabel, maxQuantity } from '@/lib/shop-logic';
 import { lineUnitPrice } from '@/lib/pricing';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import ProductImage from './ProductImage';
 import { EASE_OUT } from './motion/timing';
 

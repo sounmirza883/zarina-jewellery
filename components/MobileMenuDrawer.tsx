@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
-import { AnimatePresence, m } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useSignedIn } from '@/lib/account';
 import { EASE_OUT } from './motion/timing';
 
