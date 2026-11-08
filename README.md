@@ -1,6 +1,6 @@
 # Zarina Jewels - Artisanal Artificial Jewellery Storefront
 
-A luxury, modern frontend-only e-commerce web application built for **Zarina Jewels**, an artificial jewellery brand in Pakistan. Built with Next.js (App Router), TypeScript, Tailwind CSS, Zustand, and React Hook Form with Zod validation.
+A luxury, modern e-commerce web application built for **Zarina Jewels**, an artificial jewellery brand in Pakistan. Built with Next.js (App Router), TypeScript, Tailwind CSS, Zustand, and React Hook Form with Zod validation. Products, orders, store settings and admin login are stored in **Supabase** (see [Supabase setup](#-supabase-setup)).
 
 ## ✨ Brand Specifications
 - **Brand Name**: Zarina Jewels (managed centrally in `/config/site.ts`)
@@ -45,6 +45,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── page.tsx                     # Home page (Hero, Verse, Collections, Trust, Story)
 │   ├── policies/                    # Returns, Delivery, Privacy, Terms
 │   ├── product/[slug]/page.tsx      # Product detail page with gallery & JSON-LD schema
+│   ├── actions/revalidate.ts        # Admin-only server action: refreshes static pages after edits
 │   ├── robots.ts                    # Search crawler rules
 │   ├── sitemap.ts                   # Dynamic XML sitemap
 │   └── shop/page.tsx                # Shop all catalogue with search, sort, and price filters
@@ -60,6 +61,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── ProductCard.tsx              # Reusable product card with quick add
 │   ├── ProductDetailClient.tsx      # Gallery, selectors, qty, and WhatsApp link
 │   ├── ProductImage.tsx             # Next.js image with beige placeholder fallback
+│   ├── SettingsHydrator.tsx         # Passes admin shipping rules from the server to the cart
 │   ├── ShopCatalog.tsx              # Interactive catalog with filters & sorting
 │   ├── ToastNotification.tsx        # Real-time feedback for cart updates
 │   └── TrustStrip.tsx               # 4-pillar customer trust row
@@ -70,9 +72,15 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ├── data/
 │   └── products.ts                  # Mock products with materials & category definitions
 ├── lib/
-│   ├── api.ts                       # Abstracted API layer for products & categories
+│   ├── api.ts                       # Server-side reads of products & settings (Supabase, static fallback)
+│   ├── admin-store.ts               # Admin dashboard calls (login, orders, products, settings)
+│   ├── settings.ts                  # Admin settings type and defaults
+│   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── shop-logic.ts                # Pure math, shipping calculations, PK phone validation
 │   └── shop-logic.test.ts           # Node built-in unit tests (node:test)
+├── middleware.ts                    # Keeps the admin Supabase session fresh on /admin
+├── supabase/
+│   └── schema.sql                   # Tables, row level security, place_order(), seed products
 ├── store/
 │   └── cart.ts                      # Persistent Zustand store synced to localStorage
 └── types/
@@ -116,13 +124,16 @@ Each product requires:
 
 ---
 
-## 🔌 Replacing the Data Layer with a Real API
-All pages and components interact with products **exclusively** through `/lib/api.ts`.
-To connect to a live backend (such as WooCommerce, Shopify Headless, MedusaJS, or a custom REST / GraphQL API):
-1. Open `/lib/api.ts`.
-2. Replace the internal array lookups with standard `fetch('https://api.yourdomain.com/products')` calls inside `getProducts()`, `getProductBySlug()`, `getProductsByCategory()`, and `searchProducts()`.
-3. Return data mapped to the `Product` interface in `/types/product.ts`.
-4. **None of your pages, components, or UI code need to be modified** because they already consume the abstracted Promise-based API functions.
+## 🔌 Supabase setup
+Products, orders, store settings and admin login live in Supabase. Storefront pages read through `/lib/api.ts`.
+1. Create a project at [supabase.com](https://supabase.com).
+2. Open **SQL Editor**, paste `supabase/schema.sql` and run it (safe to re-run).
+3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
+4. In **Authentication -> Providers -> Email**, turn off "Allow new users to sign up".
+5. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
+6. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js` and `@supabase/ssr` packages.
+
+Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout and the admin dashboard need Supabase.
 
 ---
 
@@ -131,7 +142,6 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Unique order number generation (`ZJ-XXXXX`)
 
 Run the tests using:
 ```bash
