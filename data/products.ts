@@ -120,7 +120,7 @@ export const PRODUCTS: Product[] = [
     price: 1650,
     compareAtPrice: 1950,
     images: [
-      'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80',
       'https://images.unsplash.com/photo-1596944924616-7b38e7cfac36?auto=format&fit=crop&w=1000&q=80',
     ],
     colors: ['Gold-tone with Cream Pearl', 'Rose Gold-tone'],

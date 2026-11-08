@@ -7,6 +7,7 @@ import { siteConfig } from '@/config/site';
 interface CartState {
   items: CartItem[];
   isDrawerOpen: boolean;
+  isMobileMenuOpen: boolean;
   lastAddedItem: CartItem | null;
   toastMessage: string | null;
 
@@ -18,6 +19,9 @@ interface CartState {
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleDrawer: () => void;
+  openMobileMenu: () => void;
+  closeMobileMenu: () => void;
+  toggleMobileMenu: () => void;
   clearToast: () => void;
 
   // Computed helpers
@@ -36,6 +40,7 @@ export const useCartStore = create<CartState>()(
     (set, get) => ({
       items: [],
       isDrawerOpen: false,
+      isMobileMenuOpen: false,
       lastAddedItem: null,
       toastMessage: null,
 
@@ -109,6 +114,9 @@ export const useCartStore = create<CartState>()(
       openDrawer: () => set({ isDrawerOpen: true }),
       closeDrawer: () => set({ isDrawerOpen: false }),
       toggleDrawer: () => set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
+      openMobileMenu: () => set({ isMobileMenuOpen: true }),
+      closeMobileMenu: () => set({ isMobileMenuOpen: false }),
+      toggleMobileMenu: () => set((state) => ({ isMobileMenuOpen: !state.isMobileMenuOpen })),
       clearToast: () => set({ toastMessage: null }),
 
       getTotals: () => {
