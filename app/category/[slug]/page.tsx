@@ -57,6 +57,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       <ShopCatalog
         initialProducts={products}
         defaultCategory={category.id as ProductCategory}
+        showCategoryNav
         pageTitle={category.name}
         pageSubtitle={category.description}
       />

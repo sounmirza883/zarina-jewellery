@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react';
 import { Product, ProductCategory } from '@/types/product';
@@ -8,7 +9,10 @@ import ProductCard from './ProductCard';
 
 interface ShopCatalogProps {
   initialProducts: Product[];
+  /** The category this page is about ('all' on Shop All, New Arrivals and Best Sellers). */
   defaultCategory?: ProductCategory | 'all';
+  /** Show the category links (All Pieces, Earrings, ...). Only the category pages turn this on. */
+  showCategoryNav?: boolean;
   pageTitle?: string;
   pageSubtitle?: string;
 }
@@ -16,6 +20,7 @@ interface ShopCatalogProps {
 export default function ShopCatalog({
   initialProducts,
   defaultCategory = 'all',
+  showCategoryNav = false,
   pageTitle = 'The Collection',
   pageSubtitle = 'Discover timeless Pakistani artificial jewellery crafted for your moments of celebration.',
 }: ShopCatalogProps) {
@@ -23,7 +28,7 @@ export default function ShopCatalog({
   const queryParam = searchParams.get('q') || '';
 
   const productsList = initialProducts;
-  const [category, setCategory] = useState<ProductCategory | 'all'>(defaultCategory);
+  const category = defaultCategory;
   const [search, setSearch] = useState<string>(queryParam);
   const [sort, setSort] = useState<'newest' | 'price-low' | 'price-high' | 'best-selling'>('newest');
   const [priceTier, setPriceTier] = useState<'all' | 'under-2000' | '2000-3500' | 'above-3500'>('all');
@@ -36,12 +41,12 @@ export default function ShopCatalog({
     setSearch(queryParam);
   }
 
-  const categories: { label: string; value: ProductCategory | 'all' }[] = [
-    { label: 'All Pieces', value: 'all' },
-    { label: 'Earrings', value: 'earrings' },
-    { label: 'Necklaces', value: 'necklaces' },
-    { label: 'Rings', value: 'rings' },
-    { label: 'Bracelets', value: 'bracelets' },
+  const categories: { label: string; value: ProductCategory | 'all'; href: string }[] = [
+    { label: 'All Pieces', value: 'all', href: '/shop' },
+    { label: 'Earrings', value: 'earrings', href: '/category/earrings' },
+    { label: 'Necklaces', value: 'necklaces', href: '/category/necklaces' },
+    { label: 'Rings', value: 'rings', href: '/category/rings' },
+    { label: 'Bracelets', value: 'bracelets', href: '/category/bracelets' },
   ];
 
   const filteredProducts = useMemo(() => {
@@ -88,10 +93,9 @@ export default function ShopCatalog({
     return list;
   }, [productsList, category, search, priceTier, sort]);
 
-  const hasActiveFilters = category !== 'all' || search !== '' || priceTier !== 'all' || sort !== 'newest';
+  const hasActiveFilters = search !== '' || priceTier !== 'all' || sort !== 'newest';
 
   const resetFilters = () => {
-    setCategory('all');
     setSearch('');
     setPriceTier('all');
     setSort('newest');
@@ -165,25 +169,27 @@ export default function ShopCatalog({
             </div>
           </div>
 
-          {/* Category Chips (Desktop & visible by default) */}
-          <div className={`pt-3 border-t border-[#FAF7F2] flex flex-wrap items-center justify-between gap-3 ${mobileFilterOpen ? 'block' : 'hidden md:flex'}`}>
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className="text-xs text-[#8A8A8A] font-medium mr-1 hidden lg:inline">Category:</span>
-              {categories.map((cat) => (
-                <button
-                  key={cat.value}
-                  type="button"
-                  onClick={() => setCategory(cat.value)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all ${
-                    category === cat.value
-                      ? 'bg-[#0B0D12] text-white shadow-xs'
-                      : 'bg-[#FAF7F2] text-[#575757] hover:bg-[#F3ECE1] hover:text-[#1F1F1F]'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
+          {/* Category links: category pages only, so Shop All and the other lists stay clean */}
+          <div className={`pt-3 border-t border-[#FAF7F2] flex flex-wrap items-center gap-3 ${showCategoryNav ? 'justify-between' : 'justify-end'} ${mobileFilterOpen ? 'block' : 'hidden md:flex'}`}>
+            {showCategoryNav && (
+              <nav aria-label="Categories" className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <span className="text-xs text-[#8A8A8A] font-medium mr-1 hidden lg:inline">Category:</span>
+                {categories.map((cat) => (
+                  <Link
+                    key={cat.value}
+                    href={cat.href}
+                    aria-current={category === cat.value ? 'page' : undefined}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-medium tracking-wide transition-all ${
+                      category === cat.value
+                        ? 'bg-[#0B0D12] text-white shadow-xs'
+                        : 'bg-[#FAF7F2] text-[#575757] hover:bg-[#F3ECE1] hover:text-[#1F1F1F]'
+                    }`}
+                  >
+                    {cat.label}
+                  </Link>
+                ))}
+              </nav>
+            )}
 
             {/* Price Range Filter Pills */}
             <div className="flex flex-wrap items-center gap-1.5">
