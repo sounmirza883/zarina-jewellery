@@ -7,7 +7,6 @@ import Footer from '@/components/Footer';
 import CartDrawer from '@/components/CartDrawer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
 import ToastNotification from '@/components/ToastNotification';
-import MobileBottomNav from '@/components/MobileBottomNav';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -79,12 +78,11 @@ export default function RootLayout({
     >
       <body className="bg-[#FAF7F2] text-[#1F1F1F] min-h-screen flex flex-col font-sans selection:bg-[#B8893B]/20 selection:text-[#0B0D12]" suppressHydrationWarning>
         <Header />
-        <main className="flex-1 pb-16 lg:pb-0">{children}</main>
+        <main className="flex-1">{children}</main>
         <Footer />
         <CartDrawer />
         <FloatingWhatsApp />
         <ToastNotification />
-        <MobileBottomNav />
       </body>
     </html>
   );

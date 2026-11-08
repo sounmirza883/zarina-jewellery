@@ -5,7 +5,7 @@ import { siteConfig } from '@/config/site';
 
 export default function FloatingWhatsApp() {
   return (
-    <aside aria-label="Support and Quick Contact" className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-40">
+    <aside aria-label="Support and Quick Contact" className="fixed bottom-6 right-6 z-40">
       <a
         href={siteConfig.contact.whatsappUrl}
         target="_blank"
