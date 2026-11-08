@@ -53,7 +53,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── sitemap.ts                   # Dynamic XML sitemap
 │   └── shop/page.tsx                # Shop all catalogue with search, sort, and price filters
 ├── components/
-│   ├── admin/                       # Product editor, variants, image upload, reviews tab
+│   ├── admin/                       # Product editor, variants, image upload, reviews tab, coupons tab
 │   ├── OrderSlip.tsx, OrderPdfButton.tsx   # Customer order PDF and admin COD dispatch slip PDF
 │   ├── ReviewsSection.tsx, StarRating.tsx  # Reviews list, submit form and stars
 │   ├── BrandStoryBlock.tsx          # Home page brand narrative
@@ -84,7 +84,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
 │   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
-│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts   # Accounts, PDFs, JSON-LD, reviews
+│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts   # Accounts, PDFs, JSON-LD, reviews, coupons
 │   └── *.test.ts                    # Node built-in unit tests (node:test)
 ├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
@@ -122,7 +122,7 @@ Stock goes down automatically when an order is placed and comes back if the orde
 ---
 
 ## 🔌 Supabase setup
-Products (with variants and stock), reviews, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
+Products (with variants and stock), reviews, coupons, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Run the SQL first, before deploying this code.** Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again and never deletes existing data.
 3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
@@ -136,7 +136,9 @@ Without the env vars the storefront falls back to the static products in `/data/
 
 **Order PDFs**: after checkout the customer can download an order PDF. In the admin order window you can download the COD dispatch slip as a PDF or print it.
 
-**Known limits**: review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
+**Coupons**: in the admin **Coupons** tab create a code (percentage off, fixed amount off, or free delivery) and choose which categories it works on (all, or ticked ones), a minimum spend, whether it also applies to items already on sale, start and expiry dates, a total number of uses and once per customer (by phone number or account). Customers type the code in the box at checkout. The discount is worked out inside `place_order`, so the browser cannot change it; a cancelled order gives its coupon use back. Delivery stays free above the free-shipping amount even when a coupon is used. Run the updated `supabase/schema.sql` before deploying this code.
+
+**Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
 
 ---
 
@@ -145,7 +147,7 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, JSON-LD and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash
