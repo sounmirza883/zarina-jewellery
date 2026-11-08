@@ -7,6 +7,11 @@ import Footer from '@/components/Footer';
 import CartDrawer from '@/components/CartDrawer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
 import ToastNotification from '@/components/ToastNotification';
+import SettingsHydrator from '@/components/SettingsHydrator';
+import { getSiteSettings } from '@/lib/api';
+
+// Pages are static; this also refreshes them every 5 minutes if the database was edited outside the admin.
+export const revalidate = 300;
 
 const inter = Inter({
   subsets: ['latin'],
@@ -66,18 +71,26 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const settings = await getSiteSettings();
+
   return (
     <html
       lang="en"
       className={`${inter.variable} ${cormorantGaramond.variable} ${amiri.variable} ${notoNastaliq.variable}`}
     >
       <body className="bg-[#FAF7F2] text-[#1F1F1F] min-h-screen flex flex-col font-sans selection:bg-[#B8893B]/20 selection:text-[#0B0D12]" suppressHydrationWarning>
-        <Header />
+        <SettingsHydrator
+          flatRate={settings.flatShippingRate}
+          freeShippingThreshold={settings.freeShippingThreshold}
+        />
+        <Header
+          announcement={{ enabled: settings.announcementEnabled, text: settings.announcementText }}
+        />
         <main className="flex-1">{children}</main>
         <Footer />
         <CartDrawer />

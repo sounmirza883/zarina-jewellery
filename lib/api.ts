@@ -1,5 +1,10 @@
+import { cache } from 'react';
 import { PRODUCTS, CATEGORIES } from '@/data/products';
 import { Product, ProductCategory, CategoryMeta } from '@/types/product';
+import { createPublicClient } from '@/lib/supabase/public';
+import { supabaseConfigured } from '@/lib/supabase/config';
+import { rowToProduct, type ProductRow } from '@/lib/supabase/mappers';
+import { DEFAULT_SETTINGS, type AdminSettings } from '@/lib/settings';
 
 export interface ProductFilters {
   category?: ProductCategory | 'all';
@@ -12,11 +17,40 @@ export interface ProductFilters {
 }
 
 /**
+ * One catalogue read per request (React cache), newest first.
+ * shortcut: without Supabase env vars the static seed catalogue is served so the site still runs locally; drop this once env is mandatory.
+ */
+const loadProducts = cache(async (): Promise<Product[]> => {
+  if (!supabaseConfigured) return PRODUCTS;
+
+  const { data, error } = await createPublicClient()
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(`Could not load products: ${error.message}`);
+  return (data as ProductRow[]).map(rowToProduct);
+});
+
+/**
+ * Store settings edited in the admin Settings tab (shipping rules, announcement bar).
+ */
+export const getSiteSettings = cache(async (): Promise<AdminSettings> => {
+  if (!supabaseConfigured) return DEFAULT_SETTINGS;
+
+  const { data, error } = await createPublicClient().from('store_settings').select('data').maybeSingle();
+  if (error) {
+    // Settings only tune shipping and the announcement bar, so a failure must not take the whole site down.
+    console.error(`Could not load settings: ${error.message}`);
+    return DEFAULT_SETTINGS;
+  }
+  return { ...DEFAULT_SETTINGS, ...(data?.data ?? {}) };
+});
+
+/**
  * Returns products matching provided filters, sorting, and search.
- * Mimics an asynchronous API endpoint for clean separation of concerns.
  */
 export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
-  let list = [...PRODUCTS];
+  let list = [...(await loadProducts())];
 
   // Category filter
   if (filters.category && filters.category !== 'all') {
@@ -72,7 +106,7 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
  * Returns a single product by slug.
  */
 export async function getProductBySlug(slug: string): Promise<Product | null> {
-  const product = PRODUCTS.find((p) => p.slug === slug);
+  const product = (await loadProducts()).find((p) => p.slug === slug);
   return product || null;
 }
 

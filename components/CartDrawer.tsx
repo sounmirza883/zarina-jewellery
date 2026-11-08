@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
 import { formatPKR } from '@/lib/shop-logic';
-import { siteConfig } from '@/config/site';
 import ProductImage from './ProductImage';
 
 export default function CartDrawer() {
@@ -38,7 +37,7 @@ export default function CartDrawer() {
   }, [isDrawerOpen, closeDrawer]);
 
   const totals = getTotals();
-  const freeThreshold = siteConfig.shipping.freeShippingThreshold;
+  const freeThreshold = useCartStore((s) => s.shipping.freeShippingThreshold);
   const progressPercent = Math.min(100, Math.round((totals.subtotal / freeThreshold) * 100));
 
   if (!isDrawerOpen) return null;

@@ -4,14 +4,13 @@ import Link from 'next/link';
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, ShieldCheck, ChevronRight } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
 import { formatPKR } from '@/lib/shop-logic';
-import { siteConfig } from '@/config/site';
 import ProductImage from '@/components/ProductImage';
 
 export default function CartPage() {
   const { items, updateQuantity, removeItem, clearCart, getTotals } = useCartStore();
   const totals = getTotals();
 
-  const freeThreshold = siteConfig.shipping.freeShippingThreshold;
+  const freeThreshold = useCartStore((s) => s.shipping.freeShippingThreshold);
   const progressPercent = Math.min(100, Math.round((totals.subtotal / freeThreshold) * 100));
 
   return (

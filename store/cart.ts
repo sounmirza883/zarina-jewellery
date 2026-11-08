@@ -10,8 +10,11 @@ interface CartState {
   isMobileMenuOpen: boolean;
   lastAddedItem: CartItem | null;
   toastMessage: string | null;
+  // Admin-controlled shipping rules; hydrated from the server (see SettingsHydrator). Not persisted.
+  shipping: { flatRate: number; freeShippingThreshold: number };
 
   // Actions
+  setShipping: (flatRate: number, freeShippingThreshold: number) => void;
   addItem: (product: Product, quantity?: number, selectedColor?: string, selectedSize?: string) => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
@@ -43,6 +46,13 @@ export const useCartStore = create<CartState>()(
       isMobileMenuOpen: false,
       lastAddedItem: null,
       toastMessage: null,
+      shipping: {
+        flatRate: siteConfig.shipping.flatRate,
+        freeShippingThreshold: siteConfig.shipping.freeShippingThreshold,
+      },
+
+      setShipping: (flatRate, freeShippingThreshold) =>
+        set({ shipping: { flatRate, freeShippingThreshold } }),
 
       addItem: (product, quantity = 1, selectedColor, selectedSize) => {
         const color = selectedColor || product.colors[0] || 'Default';
@@ -120,11 +130,8 @@ export const useCartStore = create<CartState>()(
       clearToast: () => set({ toastMessage: null }),
 
       getTotals: () => {
-        return calculateCartTotals(
-          get().items,
-          siteConfig.shipping.flatRate,
-          siteConfig.shipping.freeShippingThreshold
-        );
+        const { items, shipping } = get();
+        return calculateCartTotals(items, shipping.flatRate, shipping.freeShippingThreshold);
       },
     }),
     {

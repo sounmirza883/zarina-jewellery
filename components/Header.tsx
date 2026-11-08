@@ -15,7 +15,7 @@ import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
 import MobileMenuDrawer from './MobileMenuDrawer';
 
-export default function Header() {
+export default function Header({ announcement }: { announcement: { enabled: boolean; text: string } }) {
   const pathname = usePathname();
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -51,10 +51,10 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-40 w-full bg-[#FAF7F2] border-b border-[#B8893B]/20">
         {/* Top Announcement Bar */}
-        {siteConfig.announcement.enabled && (
+        {announcement.enabled && (
           <div className="bg-[#0B0D12] text-[#FAF7F2] text-[11px] sm:text-xs py-2 px-4 text-center tracking-wide font-medium flex items-center justify-center gap-2 border-b border-[#B8893B]/30">
             <Sparkles className="w-3.5 h-3.5 text-[#D9B66A] shrink-0" />
-            <span>{siteConfig.announcement.text}</span>
+            <span>{announcement.text}</span>
           </div>
         )}
 

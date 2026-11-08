@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react';
 import { Product, ProductCategory } from '@/types/product';
 import ProductCard from './ProductCard';
-import { getStoredProducts } from '@/lib/admin-store';
 
 interface ShopCatalogProps {
   initialProducts: Product[];
@@ -23,27 +22,12 @@ export default function ShopCatalog({
   const searchParams = useSearchParams();
   const queryParam = searchParams.get('q') || '';
 
-  const [productsList, setProductsList] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      const local = getStoredProducts();
-      if (local && local.length > 0) return local;
-    }
-    return initialProducts;
-  });
+  const productsList = initialProducts;
   const [category, setCategory] = useState<ProductCategory | 'all'>(defaultCategory);
   const [search, setSearch] = useState<string>(queryParam);
   const [sort, setSort] = useState<'newest' | 'price-low' | 'price-high' | 'best-selling'>('newest');
   const [priceTier, setPriceTier] = useState<'all' | 'under-2000' | '2000-3500' | 'above-3500'>('all');
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
-
-  // Sync with admin-updated products from localStorage
-  useEffect(() => {
-    const handleUpdate = () => {
-      setProductsList(getStoredProducts());
-    };
-    window.addEventListener('zarina_products_updated', handleUpdate);
-    return () => window.removeEventListener('zarina_products_updated', handleUpdate);
-  }, []);
 
   // Sync search param during render when URL query changes
   const [prevQueryParam, setPrevQueryParam] = useState(queryParam);
