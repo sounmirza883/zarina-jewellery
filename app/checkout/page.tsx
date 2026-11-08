@@ -20,7 +20,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { useCartStore } from '@/store/cart';
-import { formatPKR, isValidPakistaniPhone, generateOrderNumber } from '@/lib/shop-logic';
+import { formatPKR, isValidPakistaniPhone } from '@/lib/shop-logic';
+import { createClient } from '@/lib/supabase/client';
+import { supabaseConfigured } from '@/lib/supabase/config';
 import { siteConfig } from '@/config/site';
 import { Order } from '@/types/product';
 import ProductImage from '@/components/ProductImage';
@@ -62,6 +64,7 @@ export default function CheckoutPage() {
   const totals = getTotals();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const {
     register,
@@ -84,61 +87,59 @@ export default function CheckoutPage() {
   const onSubmit = async (data: CheckoutFormValues) => {
     if (items.length === 0) return;
 
+    setSubmitError('');
+    if (!supabaseConfigured) {
+      setSubmitError('Online ordering is not available right now. Please order through WhatsApp.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      // Generate authentic order reference
-      const orderNumber = generateOrderNumber();
-
-      const newOrder: Order = {
-        orderNumber,
-        items: [...items],
-        subtotal: totals.subtotal,
-        shipping: totals.shipping,
-        total: totals.total,
-        customer: {
+      // The server re-prices the bag, adds shipping and assigns the order number (place_order in supabase/schema.sql).
+      const { data: placed, error } = await createClient().rpc('place_order', {
+        p_lines: items.map((i) => ({
+          productId: i.product.id,
+          quantity: i.quantity,
+          color: i.selectedColor,
+          size: i.selectedSize ?? null,
+        })),
+        p_customer: {
           fullName: data.fullName,
           phone: data.phone,
-          whatsapp: data.whatsapp || data.phone,
-          email: data.email || undefined,
+          whatsapp: data.whatsapp,
+          email: data.email,
           province: data.province,
           city: data.city,
           address: data.address,
-          notes: data.notes || undefined,
+          notes: data.notes,
         },
-        createdAt: new Date().toISOString(),
-        paymentMethod: 'Cash on Delivery',
-        status: 'Pending Phone Confirmation',
-      };
+      });
 
-      // Store order in localStorage for access on /order-success and /admin
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('zarina_last_order', JSON.stringify(newOrder));
-
-        // Append to customer order history
-        try {
-          const historyRaw = localStorage.getItem('zarina_order_history');
-          const history: Order[] = historyRaw ? JSON.parse(historyRaw) : [];
-          history.unshift(newOrder);
-          localStorage.setItem('zarina_order_history', JSON.stringify(history.slice(0, 50)));
-
-          // Also prepend to admin orders list
-          const adminRaw = localStorage.getItem('zarina_admin_orders');
-          const adminOrders: Order[] = adminRaw ? JSON.parse(adminRaw) : [];
-          adminOrders.unshift(newOrder);
-          localStorage.setItem('zarina_admin_orders', JSON.stringify(adminOrders));
-          window.dispatchEvent(new Event('zarina_orders_updated'));
-        } catch {
-          // Ignore history storage errors
-        }
+      if (error || !placed) {
+        // P0001 is a validation message written for customers inside place_order; anything else is a server fault.
+        setSubmitError(
+          error?.code === 'P0001'
+            ? error.message
+            : 'We could not place your order. Please try again or order through WhatsApp.'
+        );
+        setIsSubmitting(false);
+        return;
       }
 
-      // Clear shopping bag
-      clearCart();
+      const order = placed as Order;
+      // Visitors cannot read orders back from the database, so the success page reads this local copy.
+      // The order is already saved, so a storage failure (private mode, quota) must not block the redirect.
+      try {
+        localStorage.setItem('zarina_last_order', JSON.stringify(order));
+      } catch {
+        // The success page still gets the order number from the URL.
+      }
 
-      // Redirect to success page
-      router.push(`/order-success?orderId=${orderNumber}`);
+      clearCart();
+      router.push(`/order-success?orderId=${order.orderNumber}`);
     } catch {
+      setSubmitError('We could not place your order. Please try again or order through WhatsApp.');
       setIsSubmitting(false);
     }
   };
@@ -445,6 +446,16 @@ export default function CheckoutPage() {
                     Estimated delivery time: <strong>2-4 working days</strong> across all Pakistani cities. Our support team will contact you to confirm the order before dispatch.
                   </p>
                 </div>
+
+                {submitError && (
+                  <p
+                    role="alert"
+                    className="p-3 rounded-lg border border-[#991B1B]/30 bg-rose-50 text-xs text-[#991B1B] flex items-start gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{submitError}</span>
+                  </p>
+                )}
 
                 {/* Submit Order Button */}
                 <button

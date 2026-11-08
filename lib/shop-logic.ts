@@ -89,14 +89,6 @@ export function normalizePakistaniPhone(phone: string): string {
 }
 
 /**
- * Generates an authentic order reference (e.g. ZJ-73821)
- */
-export function generateOrderNumber(): string {
-  const randomNum = Math.floor(10000 + Math.random() * 90000);
-  return `ZJ-${randomNum}`;
-}
-
-/**
  * Helper to compute composite cart item key
  */
 export function getCartItemId(productId: string, color: string, size?: string): string {

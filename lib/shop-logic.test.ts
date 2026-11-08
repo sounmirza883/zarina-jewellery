@@ -5,7 +5,6 @@ import {
   calculateCartTotals,
   isValidPakistaniPhone,
   normalizePakistaniPhone,
-  generateOrderNumber,
   getCartItemId,
 } from './shop-logic';
 import { Product, CartItem } from '../types/product';
@@ -111,11 +110,6 @@ test('normalizePakistaniPhone normalizes phone numbers to 03XXXXXXXXX format', (
   assert.equal(normalizePakistaniPhone('+923001234567'), '03001234567');
   assert.equal(normalizePakistaniPhone('0300-1234567'), '03001234567');
   assert.equal(normalizePakistaniPhone('923219876543'), '03219876543');
-});
-
-test('generateOrderNumber returns a formatted order ID', () => {
-  const orderNum = generateOrderNumber();
-  assert.match(orderNum, /^ZJ-\d{5}$/);
 });
 
 test('getCartItemId produces consistent identifier', () => {
