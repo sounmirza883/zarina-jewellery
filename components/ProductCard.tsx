@@ -8,6 +8,7 @@ import { activeVariants, discountPercent as calcDiscount, isPurchasable, priceRa
 import { useCartStore } from '@/store/cart';
 import ProductImage from './ProductImage';
 import StarRating from './StarRating';
+import WishlistButton from './WishlistButton';
 
 interface ProductCardProps {
   product: Product;
@@ -51,6 +52,8 @@ export default function ProductCard({ product, priority = false }: ProductCardPr
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           />
         </div>
+
+        <WishlistButton productId={product.id} productName={product.name} variant="card" />
 
         {/* Badges Container */}
         <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">

@@ -72,6 +72,7 @@ export default function MobileMenuDrawer() {
     { name: 'Shop All Pieces', href: '/shop' },
     { name: 'New Arrivals', href: '/new-arrivals' },
     { name: 'Best Sellers', href: '/best-sellers' },
+    { name: 'My Wishlist', href: '/wishlist' },
     signedIn
       ? { name: 'My Account & Orders', href: '/account' }
       : { name: 'Log In / Create Account', href: '/login' },

@@ -32,6 +32,7 @@ import ProductImage from './ProductImage';
 import ProductCard from './ProductCard';
 import StarRating from './StarRating';
 import ReviewsSection from './ReviewsSection';
+import WishlistButton from './WishlistButton';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -217,15 +218,18 @@ export default function ProductDetailClient({
                 <span className="text-xs uppercase tracking-[0.2em] text-[#B8893B] font-semibold">
                   {product.category}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleShare}
-                  className="text-xs text-[#575757] hover:text-[#B8893B] flex items-center gap-1 transition-colors"
-                  title="Share link"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>{copiedLink ? 'Link Copied!' : 'Share'}</span>
-                </button>
+                <div className="flex items-center gap-4">
+                  <WishlistButton productId={product.id} productName={product.name} variant="detail" />
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="text-xs text-[#575757] hover:text-[#B8893B] flex items-center gap-1 transition-colors"
+                    title="Share link"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>{copiedLink ? 'Link Copied!' : 'Share'}</span>
+                  </button>
+                </div>
               </div>
 
               <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl text-[#0B0D12] font-normal leading-tight">

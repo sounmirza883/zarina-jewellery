@@ -15,9 +15,11 @@ import {
   Package,
   UserRound,
   LogOut,
+  Heart,
 } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 import { useCartStore } from '@/store/cart';
+import { useWishlistStore } from '@/store/wishlist';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { signOut, useSignedIn } from '@/lib/account';
@@ -60,6 +62,7 @@ export default function Header({ announcement }: { announcement: { enabled: bool
   const { items, openDrawer, openMobileMenu } = useCartStore();
   const totalItemCount = items.reduce((acc, item) => acc + item.quantity, 0);
   const signedIn = useSignedIn();
+  const wishlistCount = useWishlistStore((s) => s.ids.length);
 
   const shopActive =
     pathname === '/shop' ||
@@ -199,6 +202,28 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                 <Search className="w-4 h-4" />
                 <span className="tracking-wide">Search</span>
               </button>
+
+              {/* Wishlist (from the sm width up; on phones it is in the menu drawer) */}
+              <Link
+                href="/wishlist"
+                className="relative hidden sm:block p-2 text-[#1F1F1F] hover:text-[#B8893B] transition-colors"
+                aria-label={`Wishlist with ${wishlistCount} ${wishlistCount === 1 ? 'item' : 'items'}`}
+              >
+                <Heart className="w-5 h-5 sm:w-6 sm:h-6" aria-hidden="true" />
+                <AnimatePresence initial={false}>
+                  {wishlistCount > 0 && (
+                    <m.span
+                      key={wishlistCount}
+                      initial={{ scale: 1.6 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                      className="absolute -top-1 -right-1 bg-[#B8893B] text-white text-[10px] font-bold min-w-5 h-5 px-1 rounded-full flex items-center justify-center border-2 border-[#FAF7F2]"
+                    >
+                      {wishlistCount}
+                    </m.span>
+                  )}
+                </AnimatePresence>
+              </Link>
 
               {/* Account menu. The icon is the same size for everyone, so the bar does not shift. */}
               <NavMenu
