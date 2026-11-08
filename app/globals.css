@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #FAF7F2;
+  --color-ivory-dark: #F3ECE1;
+  --color-charcoal: #1F1F1F;
+  --color-charcoal-muted: #575757;
+  --color-charcoal-light: #8A8A8A;
+  --color-navy: #0B0D12;
+  --color-navy-card: #141720;
+  --color-navy-light: #1E2330;
+  --color-gold: #B8893B;
+  --color-gold-hover: #D9B66A;
+  --color-gold-light: #F7EEDB;
+  --color-gold-border: rgba(184, 137, 59, 0.3);
+
+  --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-arabic: var(--font-amiri), serif;
+  --font-urdu: var(--font-urdu), 'Jameel Noori Nastaleeq', 'Noto Nastaliq Urdu', serif;
+}
+
+:root {
+  background-color: #FAF7F2;
+  color: #1F1F1F;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FAF7F2;
+  color: #1F1F1F;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, .font-serif-heading {
+  font-family: var(--font-serif);
+}
+
+/* Custom ornamental divider */
+.ornamental-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ornamental-line::before,
+.ornamental-line::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(184, 137, 59, 0.4), transparent);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF7F2;
+}
+::-webkit-scrollbar-thumb {
+  background: #D9B66A;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8893B;
+}

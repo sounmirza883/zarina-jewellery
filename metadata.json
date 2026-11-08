@@ -1,0 +1,6 @@
+{
+  "name": "Zarina Jewels",
+  "description": "Elegant, stylish and affordable artificial jewellery for women and girls in Pakistan. Cash on Delivery nationwide.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
