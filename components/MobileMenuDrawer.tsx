@@ -65,14 +65,15 @@ export default function MobileMenuDrawer() {
   ];
 
   const quickLinks = [
+    { name: 'Home', href: '/' },
     { name: 'Shop All Pieces', href: '/shop' },
     { name: 'New Arrivals', href: '/new-arrivals' },
     { name: 'Best Sellers', href: '/best-sellers' },
     signedIn
       ? { name: 'My Account & Orders', href: '/account' }
       : { name: 'Log In / Create Account', href: '/login' },
-    { name: 'Our Story & Heritage', href: '/about' },
-    { name: 'Contact & Support', href: '/contact' },
+    { name: 'About Us', href: '/about' },
+    { name: 'Contact Us', href: '/contact' },
     { name: '7-Day Return Policy', href: '/policies/returns' },
     { name: 'Delivery Information', href: '/policies/delivery' },
     { name: 'Admin Portal (Merchant)', href: '/admin' },

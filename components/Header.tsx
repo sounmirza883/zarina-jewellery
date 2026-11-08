@@ -31,6 +31,21 @@ const SHOP_MENU = [
   { name: 'Best Sellers', href: '/best-sellers' },
 ];
 
+const HOME_LINK = { name: 'Home', href: '/' };
+const INFO_LINKS = [
+  { name: 'About Us', href: '/about' },
+  { name: 'Contact Us', href: '/contact' },
+];
+
+const navLinkClass = (active: boolean) =>
+  `relative py-1 whitespace-nowrap text-xs uppercase tracking-widest font-medium transition-colors hover:text-[#B8893B] ${
+    active ? 'text-[#B8893B] font-semibold' : 'text-[#1F1F1F]'
+  }`;
+
+const ACTIVE_UNDERLINE = (
+  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8893B] rounded-full" />
+);
+
 const MENU_ITEM =
   'flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs font-medium uppercase tracking-widest transition-colors hover:bg-[#FAF7F2] hover:text-[#B8893B]';
 
@@ -53,6 +68,21 @@ export default function Header({ announcement }: { announcement: { enabled: bool
   if (pathname.startsWith('/admin')) {
     return null;
   }
+
+  const navLink = (link: { name: string; href: string }) => {
+    const active = pathname === link.href;
+    return (
+      <Link
+        key={link.href}
+        href={link.href}
+        aria-current={active ? 'page' : undefined}
+        className={navLinkClass(active)}
+      >
+        {link.name}
+        {active && ACTIVE_UNDERLINE}
+      </Link>
+    );
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,20 +152,17 @@ export default function Header({ announcement }: { announcement: { enabled: bool
               </Link>
             </div>
 
-            {/* Desktop Navigation: Shop All with its hover menu */}
-            <nav className="hidden lg:flex items-center" aria-label="Main">
+            {/* Desktop Navigation: Home, Shop All (hover menu), About Us, Contact Us */}
+            <nav className="hidden lg:flex items-center gap-8" aria-label="Main">
+              {navLink(HOME_LINK)}
               <NavMenu
                 label="Open shop menu"
                 href="/shop"
-                triggerClassName={`relative py-1 whitespace-nowrap text-xs uppercase tracking-widest font-medium transition-colors hover:text-[#B8893B] ${
-                  shopActive ? 'text-[#B8893B] font-semibold' : 'text-[#1F1F1F]'
-                }`}
+                triggerClassName={navLinkClass(shopActive)}
                 trigger={
                   <>
                     Shop All
-                    {shopActive && (
-                      <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#B8893B] rounded-full" />
-                    )}
+                    {shopActive && ACTIVE_UNDERLINE}
                   </>
                 }
               >
@@ -156,6 +183,7 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                   ))
                 }
               </NavMenu>
+              {INFO_LINKS.map(navLink)}
             </nav>
 
             {/* Actions: Search, Account menu, Bag */}

@@ -426,7 +426,7 @@ export default function AdminPortalPage() {
     <div className="min-h-screen bg-[#F5F2EB] text-[#1F1F1F]">
       {/* Top Admin Header Bar */}
       <header className="admin-header-bar no-print bg-[#0B0D12] text-[#FAF7F2] border-b border-[#B8893B]/30 sticky top-0 z-30 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Brand Logo & Admin Badge */}
             <div className="flex items-center gap-3">
@@ -464,12 +464,17 @@ export default function AdminPortalPage() {
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="admin-tabs-bar no-print flex space-x-1 sm:space-x-4 border-t border-white/10 pt-2 pb-1 overflow-x-auto text-xs font-semibold tracking-wider uppercase">
+        </div>
+      </header>
+
+      <div className="lg:flex">
+        {/* Navigation Tabs: left sidebar on desktop, horizontal strip under the header on mobile */}
+        <aside className="admin-tabs-bar no-print sticky top-16 z-20 bg-[#0B0D12] text-[#FAF7F2] border-b border-white/10 lg:border-b-0 lg:border-r lg:border-[#B8893B]/30 lg:w-64 lg:shrink-0 lg:self-start lg:h-[calc(100vh-4rem)] lg:overflow-y-auto">
+          <nav className="flex lg:flex-col gap-1 px-4 sm:px-6 lg:px-3 pt-2 pb-1 lg:py-6 overflow-x-auto lg:overflow-x-visible text-xs font-semibold tracking-wider uppercase">
             <button
               type="button"
               onClick={() => setActiveTab('overview')}
-              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'overview'
                   ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
                   : 'border-transparent text-[#CCCCCC] hover:text-white'
@@ -482,7 +487,7 @@ export default function AdminPortalPage() {
             <button
               type="button"
               onClick={() => setActiveTab('orders')}
-              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'orders'
                   ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
                   : 'border-transparent text-[#CCCCCC] hover:text-white'
@@ -498,7 +503,7 @@ export default function AdminPortalPage() {
             <button
               type="button"
               onClick={() => setActiveTab('products')}
-              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'products'
                   ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
                   : 'border-transparent text-[#CCCCCC] hover:text-white'
@@ -514,7 +519,7 @@ export default function AdminPortalPage() {
             <button
               type="button"
               onClick={() => setActiveTab('reviews')}
-              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'reviews'
                   ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
                   : 'border-transparent text-[#CCCCCC] hover:text-white'
@@ -530,7 +535,7 @@ export default function AdminPortalPage() {
             <button
               type="button"
               onClick={() => setActiveTab('settings')}
-              className={`px-3 py-2 rounded-t-lg transition-colors border-b-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'settings'
                   ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
                   : 'border-transparent text-[#CCCCCC] hover:text-white'
@@ -539,12 +544,11 @@ export default function AdminPortalPage() {
               <Sliders className="w-3.5 h-3.5" />
               <span>Store Settings & COD</span>
             </button>
-          </div>
-        </div>
-      </header>
+          </nav>
+        </aside>
 
       {/* Main Container */}
-      <main className="admin-main-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="admin-main-content flex-1 min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {dataError && (
           <div
             role="alert"
@@ -1299,6 +1303,7 @@ export default function AdminPortalPage() {
           </div>
         )}
       </main>
+      </div>
 
       {/* ===================== ORDER DETAIL & PACKING SLIP MODAL ===================== */}
       <AnimatePresence>
