@@ -32,6 +32,10 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ```
 ├── app/
 │   ├── about/page.tsx               # Brand story, mission, and CEO letter
+│   ├── account/                     # Customer account: profile and order history (PDF + tracking)
+│   ├── auth/callback/route.ts       # Email confirmation and password-reset callback
+│   ├── login/, signup/, forgot-password/, reset-password/   # Customer sign-in pages
+│   ├── track-order/page.tsx         # Public order tracking (order number + phone)
 │   ├── best-sellers/page.tsx        # Customer favorites catalog
 │   ├── cart/page.tsx                # Dedicated bag page with line items & totals
 │   ├── category/[slug]/page.tsx     # Filtered by category (earrings, necklaces, etc.)
@@ -50,6 +54,10 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── sitemap.ts                   # Dynamic XML sitemap
 │   └── shop/page.tsx                # Shop all catalogue with search, sort, and price filters
 ├── components/
+│   ├── admin/                       # Product editor, variants, image upload, reviews tab, dispatch panel, couriers
+│   ├── OrderSlip.tsx, OrderPdfButton.tsx   # Customer order PDF and admin COD dispatch slip PDF
+│   ├── OrderTimeline.tsx            # Order status timeline (tracking page, account, admin)
+│   ├── ReviewsSection.tsx, StarRating.tsx  # Reviews list, submit form and stars
 │   ├── BrandStoryBlock.tsx          # Home page brand narrative
 │   ├── CartDrawer.tsx               # Slide-out shopping bag drawer
 │   ├── CategoryTiles.tsx            # 4 category cards
@@ -74,13 +82,15 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ├── lib/
 │   ├── api.ts                       # Server-side reads of products & settings (Supabase, static fallback)
 │   ├── admin-store.ts               # Admin dashboard calls (login, orders, products, settings)
-│   ├── settings.ts                  # Admin settings type and defaults
+│   ├── settings.ts                  # Admin settings type and defaults (shipping, announcement, couriers)
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
-│   ├── shop-logic.ts                # Pure math, shipping calculations, PK phone validation
-│   └── shop-logic.test.ts           # Node built-in unit tests (node:test)
-├── middleware.ts                    # Keeps the admin Supabase session fresh on /admin
+│   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
+│   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
+│   ├── account.ts, tracking.ts, order-pdf.ts, seo.ts, reviews-api.ts   # Accounts, tracking, PDFs, JSON-LD, reviews
+│   └── *.test.ts                    # Node built-in unit tests (node:test)
+├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
-│   └── schema.sql                   # Tables, row level security, place_order(), seed products
+│   └── schema.sql                   # THE one SQL file: tables, RLS, RPCs, triggers, storage, seed data
 ├── store/
 │   └── cart.ts                      # Persistent Zustand store synced to localStorage
 └── types/
@@ -99,41 +109,37 @@ Open `/config/site.ts`:
 - Update contact details or WhatsApp link: edit `siteConfig.contact`
 
 ### 2. Adding or Editing Products
-Open `/data/products.ts`:
-Each product requires:
-```typescript
-{
-  id: 'zj-unique-id',
-  slug: 'product-slug-url',
-  name: 'Product Name',
-  category: 'earrings' | 'necklaces' | 'rings' | 'bracelets',
-  price: 2450,
-  compareAtPrice: 2950,
-  images: ['/images/products/photo1.jpg', '/images/products/photo2.jpg'],
-  colors: ['Gold-tone', 'Silver-tone'],
-  sizes: ['6', '7', '8'], // Optional (for rings)
-  description: 'Short, clear product description',
-  details: ['Gold-tone finish', 'AAA cubic zirconia'],
-  tags: ['kundan', 'bridal'],
-  isNew: true,
-  isBestSeller: false,
-  inStock: true,
-}
-```
+Use the admin panel (`/admin` -> Catalogue & Inventory -> Add Product). Each product has:
+- **General**: name, URL slug, category, new / best-seller / listed switches, short description, long description, highlight bullets, tags
+- **Pricing**: regular price, optional sale price (the selling price is the sale price when set, otherwise the regular price)
+- **Variants**: colour and size combinations, each with its own SKU, regular/sale price, stock quantity, image and active switch
+- **Images**: upload several photos (stored in the Supabase `product-images` bucket)
+- **Attributes**: name/value specs such as Material or Finish
+- **SEO**: meta title, meta description, meta keywords and the social-share image
+
+Stock goes down automatically when an order is placed and comes back if the order is cancelled. `/data/products.ts` is only the offline fallback used when Supabase is not configured.
+
 *Content Rule Reminder*: All artificial jewellery items must specify simulated materials such as **gold-tone, zircon, cubic zirconia, or glass kundan**. Never use claims of solid gold or natural diamonds.
 
 ---
 
 ## 🔌 Supabase setup
-Products, orders, store settings and admin login live in Supabase. Storefront pages read through `/lib/api.ts`.
+Products (with variants and stock), reviews, customer accounts, orders, order tracking, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
 1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor**, paste `supabase/schema.sql` and run it (safe to re-run).
+2. **Run the SQL first, before deploying this code.** Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again and never deletes existing data.
 3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
-4. In **Authentication -> Providers -> Email**, turn off "Allow new users to sign up".
-5. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
-6. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js` and `@supabase/ssr` packages.
+4. Keep **Authentication -> Providers -> Email -> "Allow new users to sign up"** ON: customers create accounts. Admin access depends only on the `admin` role set in step 3, which customers cannot set.
+5. **Authentication -> URL Configuration**: set the Site URL to your website and add `<your site>/auth/callback` to the Redirect URLs (used by email confirmation and password reset).
+6. Before real customers sign up, connect your own email provider under **Authentication -> Emails -> SMTP**; Supabase's built-in sender allows only a few emails per hour.
+7. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
+8. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js`, `@supabase/ssr`, `jspdf` and `html2canvas-pro` packages.
+9. In the admin **Settings** tab, fill in each courier's tracking link (use `{tracking}` where the tracking number goes) so customers get a "Track with courier" link.
 
-Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout and the admin dashboard need Supabase.
+Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout, accounts, reviews, tracking and the admin dashboard need Supabase.
+
+**Order PDFs and tracking**: after checkout the customer can download an order PDF and track the order at `/track-order` with the order number and phone number. In the admin order window you can download the COD dispatch slip as a PDF or print it, set the courier and tracking number, and see the status timeline.
+
+**Known limits**: reviews and tracking lookups have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
 
 ---
 
@@ -142,8 +148,10 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, JSON-LD, tracking links and redirect safety
 
 Run the tests using:
 ```bash
-npx --yes tsx --test lib/shop-logic.test.ts
+npx --yes tsx --test lib/*.test.ts lib/supabase/*.test.ts
 ```
+The SQL in `supabase/schema.sql` cannot be unit tested here; run it on a Supabase project and place a test order, review and tracking lookup.
