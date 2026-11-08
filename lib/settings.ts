@@ -1,4 +1,5 @@
 import { siteConfig } from '@/config/site';
+import type { Courier } from '@/types/product';
 
 export interface AdminSettings {
   announcementText: string;
@@ -10,6 +11,7 @@ export interface AdminSettings {
   flatShippingRate: number;
   freeShippingThreshold: number;
   codNotice: string;
+  couriers: Courier[];
 }
 
 export const DEFAULT_SETTINGS: AdminSettings = {
@@ -22,4 +24,5 @@ export const DEFAULT_SETTINGS: AdminSettings = {
   flatShippingRate: siteConfig.shipping.flatRate,
   freeShippingThreshold: siteConfig.shipping.freeShippingThreshold,
   codNotice: 'Cash on Delivery (COD) Only - Pay when you receive parcel',
+  couriers: [],
 };

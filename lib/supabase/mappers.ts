@@ -1,6 +1,29 @@
-import type { Product, Order, OrderStatus } from '@/types/product';
+import type {
+  Order,
+  OrderEvent,
+  OrderStatus,
+  Product,
+  ProductAttribute,
+  ProductVariant,
+  Profile,
+  Review,
+} from '@/types/product';
 
 // Database rows are snake_case; the app's types are camelCase. These are the only translators.
+
+export interface VariantRow {
+  id: string;
+  product_id: string;
+  sku: string | null;
+  color: string;
+  size: string;
+  regular_price: number;
+  sale_price: number | null;
+  stock_qty: number;
+  image_url: string | null;
+  position: number;
+  active: boolean;
+}
 
 export interface ProductRow {
   id: string;
@@ -8,16 +31,35 @@ export interface ProductRow {
   name: string;
   category: Product['category'];
   price: number;
+  regular_price: number | null;
+  sale_price: number | null;
   compare_at_price: number | null;
+  short_description: string;
+  description: string;
+  details: string[];
+  attributes: ProductAttribute[];
+  tags: string[];
   images: string[];
   colors: string[];
   sizes: string[] | null;
-  description: string;
-  details: string[];
-  tags: string[];
+  meta_title: string | null;
+  meta_description: string | null;
+  meta_keywords: string[];
+  og_image: string | null;
   is_new: boolean;
   is_best_seller: boolean;
   in_stock: boolean;
+  rating_avg: number | string;
+  rating_count: number;
+  updated_at: string | null;
+  /** Present when queried with select('*, product_variants(*)'). */
+  product_variants?: VariantRow[] | null;
+}
+
+export interface OrderEventRow {
+  status: OrderStatus;
+  note: string | null;
+  created_at: string;
 }
 
 export interface OrderRow {
@@ -29,7 +71,48 @@ export interface OrderRow {
   customer: Order['customer'];
   status: OrderStatus;
   created_at: string;
+  user_id: string | null;
+  courier: string | null;
+  tracking_number: string | null;
+  /** Present when queried with select('*, order_events(*)'). */
+  order_events?: (OrderEventRow & { id?: number })[] | null;
 }
+
+export interface ReviewRow {
+  id: string;
+  product_id: string;
+  rating: number;
+  author_name: string;
+  title: string;
+  body: string;
+  status: 'pending' | 'approved';
+  is_verified: boolean;
+  created_at: string;
+  /** Present when queried with select('*, products(name)'). */
+  products?: { name: string } | null;
+}
+
+export interface ProfileRow {
+  id: string;
+  full_name: string;
+  phone: string;
+  province: string;
+  city: string;
+  address: string;
+}
+
+export const rowToVariant = (r: VariantRow): ProductVariant => ({
+  id: r.id,
+  sku: r.sku,
+  color: r.color,
+  size: r.size,
+  regularPrice: r.regular_price,
+  salePrice: r.sale_price ?? undefined,
+  stockQty: r.stock_qty,
+  imageUrl: r.image_url ?? undefined,
+  position: r.position,
+  active: r.active,
+});
 
 export const rowToProduct = (r: ProductRow): Product => ({
   id: r.id,
@@ -37,35 +120,34 @@ export const rowToProduct = (r: ProductRow): Product => ({
   name: r.name,
   category: r.category,
   price: r.price,
+  regularPrice: r.regular_price ?? r.price,
+  salePrice: r.sale_price ?? undefined,
   compareAtPrice: r.compare_at_price ?? undefined,
-  images: r.images,
-  colors: r.colors,
+  shortDescription: r.short_description ?? '',
+  description: r.description ?? '',
+  details: r.details ?? [],
+  attributes: r.attributes ?? [],
+  tags: r.tags ?? [],
+  images: r.images ?? [],
+  colors: r.colors ?? [],
   sizes: r.sizes ?? undefined,
-  description: r.description,
-  details: r.details,
-  tags: r.tags,
+  variants: (r.product_variants ?? []).map(rowToVariant).sort((a, b) => a.position - b.position),
+  metaTitle: r.meta_title ?? undefined,
+  metaDescription: r.meta_description ?? undefined,
+  metaKeywords: r.meta_keywords ?? [],
+  ogImage: r.og_image ?? undefined,
   isNew: r.is_new,
   isBestSeller: r.is_best_seller,
   inStock: r.in_stock,
+  ratingAvg: Number(r.rating_avg ?? 0),
+  ratingCount: r.rating_count ?? 0,
+  updatedAt: r.updated_at ?? undefined,
 });
 
-// created_at is left out so an update keeps the original date (the database sets it on insert).
-export const productToRow = (p: Product): ProductRow => ({
-  id: p.id,
-  slug: p.slug,
-  name: p.name,
-  category: p.category,
-  price: p.price,
-  compare_at_price: p.compareAtPrice ?? null,
-  images: p.images,
-  colors: p.colors,
-  sizes: p.sizes ?? null,
-  description: p.description,
-  details: p.details,
-  tags: p.tags,
-  is_new: p.isNew,
-  is_best_seller: p.isBestSeller,
-  in_stock: p.inStock,
+export const rowToEvent = (r: OrderEventRow): OrderEvent => ({
+  status: r.status,
+  note: r.note ?? undefined,
+  at: r.created_at,
 });
 
 export const rowToOrder = (r: OrderRow): Order => ({
@@ -78,4 +160,32 @@ export const rowToOrder = (r: OrderRow): Order => ({
   createdAt: r.created_at,
   paymentMethod: 'Cash on Delivery',
   status: r.status,
+  userId: r.user_id,
+  courier: r.courier,
+  trackingNumber: r.tracking_number,
+  events: r.order_events
+    ? [...r.order_events].map(rowToEvent).sort((a, b) => a.at.localeCompare(b.at))
+    : undefined,
+});
+
+export const rowToReview = (r: ReviewRow): Review => ({
+  id: r.id,
+  productId: r.product_id,
+  rating: r.rating,
+  authorName: r.author_name,
+  title: r.title,
+  body: r.body,
+  status: r.status,
+  isVerified: r.is_verified,
+  createdAt: r.created_at,
+  productName: r.products?.name,
+});
+
+export const rowToProfile = (r: ProfileRow): Profile => ({
+  id: r.id,
+  fullName: r.full_name,
+  phone: r.phone,
+  province: r.province,
+  city: r.city,
+  address: r.address,
 });

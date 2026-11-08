@@ -1,4 +1,23 @@
-import { Product, CategoryMeta } from '@/types/product';
+import { Product, ProductVariant, ProductAttribute, ProductCategory, CategoryMeta } from '@/types/product';
+
+/** Seed entries keep the original, simpler shape; toProduct() below fills in prices, variants, SEO and more. */
+interface SeedProduct {
+  id: string;
+  slug: string;
+  name: string;
+  category: ProductCategory;
+  price: number;
+  compareAtPrice?: number;
+  images: string[];
+  colors: string[];
+  sizes?: string[];
+  description: string;
+  details: string[];
+  tags: string[];
+  isNew: boolean;
+  isBestSeller: boolean;
+  inStock: boolean;
+}
 
 export const CATEGORIES: CategoryMeta[] = [
   {
@@ -35,7 +54,7 @@ export const CATEGORIES: CategoryMeta[] = [
   },
 ];
 
-export const PRODUCTS: Product[] = [
+const SEED_PRODUCTS: SeedProduct[] = [
   // --- EARRINGS ---
   {
     id: 'zj-ear-01',
@@ -448,3 +467,77 @@ export const PRODUCTS: Product[] = [
     inStock: true,
   },
 ];
+
+const SEED_STOCK_PER_VARIANT = 10;
+
+/** "Label: value" bullets (also several joined with " | ") become attributes; otherwise a Material attribute. */
+function attributesFromDetails(details: string[]): ProductAttribute[] {
+  const found = details
+    .flatMap((d) => d.split(' | '))
+    .map((d) => d.match(/^([A-Za-z][A-Za-z ]{1,24}):\s*(.+)$/))
+    .filter((m): m is RegExpMatchArray => m !== null)
+    .map((m) => ({ name: m[1].trim(), value: m[2].trim() }));
+  return found.length > 0 ? found : [{ name: 'Material', value: details[0] ?? 'Artificial jewellery' }];
+}
+
+function firstSentence(text: string): string {
+  const m = text.match(/^.*?[.!?](?=\s|$)/);
+  return m ? m[0] : text;
+}
+
+/** Same ids and SKUs as the SQL backfill in supabase/schema.sql (colours x sizes, in order). */
+function toProduct(s: SeedProduct): Product {
+  const onSale = s.compareAtPrice !== undefined && s.compareAtPrice > s.price;
+  const regularPrice = onSale ? (s.compareAtPrice as number) : s.price;
+  const salePrice = onSale ? s.price : undefined;
+  const colors = s.colors.length > 0 ? s.colors : [''];
+  const sizes = s.sizes && s.sizes.length > 0 ? s.sizes : [''];
+
+  let n = 0;
+  const variants: ProductVariant[] = colors.flatMap((color) =>
+    sizes.map((size) => {
+      n += 1;
+      return {
+        id: `${s.id}-v${n}`,
+        sku: `${s.id.toUpperCase()}-${String(n).padStart(2, '0')}`,
+        color,
+        size,
+        regularPrice,
+        salePrice,
+        stockQty: SEED_STOCK_PER_VARIANT,
+        position: n,
+        active: true,
+      };
+    })
+  );
+
+  return {
+    id: s.id,
+    slug: s.slug,
+    name: s.name,
+    category: s.category,
+    price: s.price,
+    regularPrice,
+    salePrice,
+    compareAtPrice: onSale ? regularPrice : undefined,
+    shortDescription: firstSentence(s.description),
+    description: s.description,
+    details: s.details,
+    attributes: attributesFromDetails(s.details),
+    tags: s.tags,
+    images: s.images,
+    colors: s.colors,
+    sizes: s.sizes,
+    variants,
+    metaTitle: s.name,
+    metaDescription: s.description.slice(0, 160),
+    metaKeywords: s.tags,
+    isNew: s.isNew,
+    isBestSeller: s.isBestSeller,
+    inStock: s.inStock,
+    ratingAvg: 0,
+    ratingCount: 0,
+  };
+}
+
+export const PRODUCTS: Product[] = SEED_PRODUCTS.map(toProduct);

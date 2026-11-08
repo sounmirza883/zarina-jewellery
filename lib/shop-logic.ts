@@ -1,4 +1,8 @@
 import { CartItem } from '@/types/product';
+import { lineUnitPrice } from './pricing';
+
+/** place_order accepts at most this many of one variant per order. */
+export const MAX_PER_ITEM = 20;
 
 /**
  * Formats numeric price into Pakistani Rupee string (e.g., Rs. 2,450)
@@ -24,7 +28,7 @@ export function calculateCartTotals(
   totalItemCount: number;
 } {
   const subtotal = items.reduce(
-    (acc, item) => acc + item.product.price * item.quantity,
+    (acc, item) => acc + lineUnitPrice(item) * item.quantity,
     0
   );
   
@@ -89,8 +93,21 @@ export function normalizePakistaniPhone(phone: string): string {
 }
 
 /**
- * Helper to compute composite cart item key
+ * Most units of a bag line the customer can ask for: the variant's stock when it was added, capped.
  */
-export function getCartItemId(productId: string, color: string, size?: string): string {
-  return `${productId}__${color}__${size || 'default'}`;
+export function maxQuantity(item: Pick<CartItem, 'variantId' | 'product'>): number {
+  const stock = item.product.variants.find((v) => v.id === item.variantId)?.stockQty;
+  return Math.min(MAX_PER_ITEM, stock ?? MAX_PER_ITEM);
+}
+
+/**
+ * "Gold-tone / 7", or "Default" for a product without options. Older order snapshots have no variantLabel.
+ */
+export function cartItemLabel(
+  item: Pick<CartItem, 'variantLabel' | 'selectedColor' | 'selectedSize'>
+): string {
+  return (
+    item.variantLabel ??
+    ([item.selectedColor, item.selectedSize].filter(Boolean).join(' / ') || 'Default')
+  );
 }

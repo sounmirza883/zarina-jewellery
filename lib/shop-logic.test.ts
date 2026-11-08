@@ -5,42 +5,11 @@ import {
   calculateCartTotals,
   isValidPakistaniPhone,
   normalizePakistaniPhone,
-  getCartItemId,
+  maxQuantity,
+  cartItemLabel,
+  MAX_PER_ITEM,
 } from './shop-logic';
-import { Product, CartItem } from '../types/product';
-
-const mockProductA: Product = {
-  id: 'prod-1',
-  slug: 'kundan-chandbali',
-  name: 'Kundan Chandbali',
-  category: 'earrings',
-  price: 2000,
-  images: ['/images/products/kundan.jpg'],
-  colors: ['Gold-tone'],
-  description: 'Elegant earrings',
-  details: ['Gold-tone finish'],
-  tags: ['traditional'],
-  isNew: true,
-  isBestSeller: true,
-  inStock: true,
-};
-
-const mockProductB: Product = {
-  id: 'prod-2',
-  slug: 'solitaire-ring',
-  name: 'Solitaire Ring',
-  category: 'rings',
-  price: 1800,
-  images: ['/images/products/ring.jpg'],
-  colors: ['Gold-tone'],
-  sizes: ['7'],
-  description: 'Sparkling ring',
-  details: ['Zircon stones'],
-  tags: ['minimal'],
-  isNew: false,
-  isBestSeller: true,
-  inStock: true,
-};
+import { makeItem, makeProduct, makeVariant } from './test-fixtures';
 
 test('formatPKR formats amount properly', () => {
   assert.equal(formatPKR(2450), 'Rs. 2,450');
@@ -49,14 +18,7 @@ test('formatPKR formats amount properly', () => {
 });
 
 test('calculateCartTotals calculates flat shipping below threshold', () => {
-  const items: CartItem[] = [
-    {
-      cartItemId: 'item-1',
-      product: mockProductA,
-      quantity: 1, // 2000 PKR < 3500
-      selectedColor: 'Gold-tone',
-    },
-  ];
+  const items = [makeItem({ unitPrice: 2000, quantity: 1 })]; // 2000 PKR < 3500
   const totals = calculateCartTotals(items, 250, 3500);
   assert.equal(totals.subtotal, 2000);
   assert.equal(totals.shipping, 250);
@@ -67,20 +29,9 @@ test('calculateCartTotals calculates flat shipping below threshold', () => {
 });
 
 test('calculateCartTotals applies free shipping above threshold', () => {
-  const items: CartItem[] = [
-    {
-      cartItemId: 'item-1',
-      product: mockProductA,
-      quantity: 1, // 2000
-      selectedColor: 'Gold-tone',
-    },
-    {
-      cartItemId: 'item-2',
-      product: mockProductB,
-      quantity: 1, // 1800 => total 3800 > 3500
-      selectedColor: 'Gold-tone',
-      selectedSize: '7',
-    },
+  const items = [
+    makeItem({ cartItemId: 'a', variantId: 'a', unitPrice: 2000, quantity: 1 }),
+    makeItem({ cartItemId: 'b', variantId: 'b', unitPrice: 1800, quantity: 1 }), // 3800 > 3500
   ];
   const totals = calculateCartTotals(items, 250, 3500);
   assert.equal(totals.subtotal, 3800);
@@ -89,6 +40,12 @@ test('calculateCartTotals applies free shipping above threshold', () => {
   assert.equal(totals.isFreeShipping, true);
   assert.equal(totals.freeShippingRemaining, 0);
   assert.equal(totals.totalItemCount, 2);
+});
+
+test('calculateCartTotals prices a line by its variant price, falling back to the product price', () => {
+  const onSale = makeItem({ unitPrice: 1500, quantity: 2, product: makeProduct({ price: 2000 }) });
+  const legacy = makeItem({ cartItemId: 'old', quantity: 1, product: makeProduct({ price: 900 }) });
+  assert.equal(calculateCartTotals([onSale, legacy], 250, 3500).subtotal, 3900);
 });
 
 test('isValidPakistaniPhone validates standard Pakistani phone numbers correctly', () => {
@@ -112,9 +69,17 @@ test('normalizePakistaniPhone normalizes phone numbers to 03XXXXXXXXX format', (
   assert.equal(normalizePakistaniPhone('923219876543'), '03219876543');
 });
 
-test('getCartItemId produces consistent identifier', () => {
-  const id1 = getCartItemId('p1', 'Gold', '7');
-  assert.equal(id1, 'p1__Gold__7');
-  const id2 = getCartItemId('p1', 'Silver');
-  assert.equal(id2, 'p1__Silver__default');
+test('maxQuantity caps a bag line at the variant stock and at the per-order limit', () => {
+  const low = makeItem({ variantId: 'v1', product: makeProduct({ variants: [makeVariant({ id: 'v1', stockQty: 3 })] }) });
+  const plenty = makeItem({ variantId: 'v1', product: makeProduct({ variants: [makeVariant({ id: 'v1', stockQty: 500 })] }) });
+  const unknown = makeItem({ variantId: 'gone' });
+  assert.equal(maxQuantity(low), 3);
+  assert.equal(maxQuantity(plenty), MAX_PER_ITEM);
+  assert.equal(maxQuantity(unknown), MAX_PER_ITEM);
+});
+
+test('cartItemLabel prefers the variant label and falls back for older snapshots', () => {
+  assert.equal(cartItemLabel({ variantLabel: 'Gold-tone / 7', selectedColor: 'x' }), 'Gold-tone / 7');
+  assert.equal(cartItemLabel({ selectedColor: 'Gold-tone', selectedSize: '7' }), 'Gold-tone / 7');
+  assert.equal(cartItemLabel({ selectedColor: '' }), 'Default');
 });

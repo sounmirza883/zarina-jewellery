@@ -25,9 +25,21 @@ const loadProducts = cache(async (): Promise<Product[]> => {
 
   const { data, error } = await createPublicClient()
     .from('products')
-    .select('*')
+    .select('*, product_variants(*)')
     .order('created_at', { ascending: false });
-  if (error) throw new Error(`Could not load products: ${error.message}`);
+  if (error) {
+    // The code can be deployed before supabase/schema.sql has been run: these codes mean the new tables
+    // or columns are missing (PGRST200/205 = not in the schema cache, 42P01/42703 = undefined table/column).
+    // Keep the site browsable with the built-in catalogue instead of failing the whole build.
+    if (['PGRST200', 'PGRST205', '42P01', '42703'].includes(error.code)) {
+      console.error(
+        `[zarina] The database is missing the latest schema (${error.message}). ` +
+          'Run supabase/schema.sql in the Supabase SQL Editor. Showing the built-in catalogue meanwhile.'
+      );
+      return PRODUCTS;
+    }
+    throw new Error(`Could not load products: ${error.message}`);
+  }
   return (data as ProductRow[]).map(rowToProduct);
 });
 
