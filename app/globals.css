@@ -23,6 +23,44 @@
 :root {
   background-color: #FAF7F2;
   color: #1F1F1F;
+
+  /* Motion tokens: entrances ease out, nothing is slower than the hero (700ms). */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 120ms;
+  --dur-2: 240ms;
+  --dur-3: 480ms;
+  --dur-4: 700ms;
+}
+
+/* Hero entrance (CSS only, so the text is never held back by JavaScript).
+   `backwards` applies the start state during the delay only; afterwards the element's own styles
+   (including hover opacity) take over. --d is the delay, --to the final opacity. */
+@keyframes hero-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+}
+@keyframes hero-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--to, 1);
+  }
+}
+.hero-rise {
+  animation: hero-rise var(--dur-4) var(--ease-out) var(--d, 0ms) backwards;
+}
+.hero-fade {
+  animation: hero-fade 900ms var(--ease-out) var(--d, 0ms) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rise,
+  .hero-fade {
+    animation: none;
+  }
 }
 
 body {

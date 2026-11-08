@@ -8,6 +8,7 @@ import CartDrawer from '@/components/CartDrawer';
 import FloatingWhatsApp from '@/components/FloatingWhatsApp';
 import ToastNotification from '@/components/ToastNotification';
 import SettingsHydrator from '@/components/SettingsHydrator';
+import MotionProvider from '@/components/motion/MotionProvider';
 import { getSiteSettings } from '@/lib/api';
 
 // Pages are static; this also refreshes them every 5 minutes if the database was edited outside the admin.
@@ -84,18 +85,24 @@ export default async function RootLayout({
       className={`${inter.variable} ${cormorantGaramond.variable} ${amiri.variable} ${notoNastaliq.variable}`}
     >
       <body className="bg-[#FAF7F2] text-[#1F1F1F] min-h-screen flex flex-col font-sans selection:bg-[#B8893B]/20 selection:text-[#0B0D12]" suppressHydrationWarning>
-        <SettingsHydrator
-          flatRate={settings.flatShippingRate}
-          freeShippingThreshold={settings.freeShippingThreshold}
-        />
-        <Header
-          announcement={{ enabled: settings.announcementEnabled, text: settings.announcementText }}
-        />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <CartDrawer />
-        <FloatingWhatsApp />
-        <ToastNotification />
+        {/* Scroll reveals start hidden; without JavaScript they must not stay that way. */}
+        <noscript>
+          <style>{'[data-reveal]{opacity:1!important;transform:none!important}'}</style>
+        </noscript>
+        <MotionProvider>
+          <SettingsHydrator
+            flatRate={settings.flatShippingRate}
+            freeShippingThreshold={settings.freeShippingThreshold}
+          />
+          <Header
+            announcement={{ enabled: settings.announcementEnabled, text: settings.announcementText }}
+          />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <CartDrawer />
+          <FloatingWhatsApp />
+          <ToastNotification />
+        </MotionProvider>
       </body>
     </html>
   );

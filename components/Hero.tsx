@@ -9,11 +9,11 @@ export default function Hero() {
     <section className="relative overflow-hidden bg-[#0B0D12] text-[#FAF7F2] py-20 sm:py-28 lg:py-32 border-b border-[#B8893B]/20">
       {/* Background Decorative Gold Radial Glows */}
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] sm:w-[850px] h-[450px] sm:h-[600px] bg-[#B8893B]/10 blur-[130px] rounded-full pointer-events-none"
+        className="hero-fade absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[650px] sm:w-[850px] h-[450px] sm:h-[600px] bg-[#B8893B]/10 blur-[130px] rounded-full pointer-events-none"
         aria-hidden="true"
       />
       <div
-        className="absolute -top-24 -right-24 w-72 h-72 bg-[#D9B66A]/10 blur-[90px] rounded-full pointer-events-none"
+        className="hero-fade absolute -top-24 -right-24 w-72 h-72 bg-[#D9B66A]/10 blur-[90px] rounded-full pointer-events-none"
         aria-hidden="true"
       />
 
@@ -28,7 +28,7 @@ export default function Hero() {
       />
 
       {/* Decorative Corner Jewellery Accents (Desktop/Tablet) */}
-      <div className="hidden lg:block absolute top-8 left-8 w-44 h-56 rounded-xl overflow-hidden border border-[#B8893B]/30 shadow-2xl opacity-60 hover:opacity-85 transition-opacity">
+      <div style={{ ["--to" as string]: "0.6", ["--d" as string]: "300ms" }} className="hero-fade hidden lg:block absolute top-8 left-8 w-44 h-56 rounded-xl overflow-hidden border border-[#B8893B]/30 shadow-2xl opacity-60 hover:opacity-85 transition-opacity">
         <Image
           src="https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=500&q=80"
           alt="Artisanal Gold-Tone Necklace"
@@ -41,7 +41,7 @@ export default function Hero() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B0D12] via-transparent to-transparent" />
       </div>
 
-      <div className="hidden lg:block absolute bottom-8 right-8 w-48 h-60 rounded-xl overflow-hidden border border-[#B8893B]/30 shadow-2xl opacity-60 hover:opacity-85 transition-opacity">
+      <div style={{ ["--to" as string]: "0.6", ["--d" as string]: "420ms" }} className="hero-fade hidden lg:block absolute bottom-8 right-8 w-48 h-60 rounded-xl overflow-hidden border border-[#B8893B]/30 shadow-2xl opacity-60 hover:opacity-85 transition-opacity">
         <Image
           src="https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=500&q=80"
           alt="Handcrafted Kundan Earrings"
@@ -57,13 +57,13 @@ export default function Hero() {
       {/* Main Hero Content */}
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center z-10">
         {/* Brand Pre-title Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#B8893B]/40 bg-white/5 backdrop-blur-xs text-[#D9B66A] text-xs uppercase tracking-widest font-medium mb-8">
+        <div className="hero-rise inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-[#B8893B]/40 bg-white/5 backdrop-blur-xs text-[#D9B66A] text-xs uppercase tracking-widest font-medium mb-8">
           <Sparkles className="w-3.5 h-3.5" />
           <span>{siteConfig.name} • Haute Jewellery</span>
         </div>
 
         {/* Sacred Verse Card Container */}
-        <div className="p-6 sm:p-10 rounded-2xl bg-white/[0.03] border border-[#B8893B]/30 backdrop-blur-sm max-w-3xl mx-auto shadow-2xl">
+        <div style={{ ["--d" as string]: "120ms" }} className="hero-rise p-6 sm:p-10 rounded-2xl bg-white/[0.03] border border-[#B8893B]/30 backdrop-blur-sm max-w-3xl mx-auto shadow-2xl">
           {/* Arabic Verse (Live Text) */}
           <p
             dir="rtl"
@@ -98,30 +98,30 @@ export default function Hero() {
         </div>
 
         {/* Tagline */}
-        <p className="mt-8 text-base sm:text-lg text-[#CCCCCC] max-w-2xl mx-auto font-light leading-relaxed">
+        <p style={{ ["--d" as string]: "280ms" }} className="hero-rise mt-8 text-base sm:text-lg text-[#CCCCCC] max-w-2xl mx-auto font-light leading-relaxed">
           Adorn your everyday moments and celebrations with timeless elegance.
           Artisanal artificial jewellery designed for the modern Pakistani woman.
         </p>
 
         {/* CTAs */}
-        <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div style={{ ["--d" as string]: "400ms" }} className="hero-rise mt-9 flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
             href="/shop"
-            className="w-full sm:w-auto px-8 py-3.5 bg-[#B8893B] hover:bg-[#D9B66A] text-[#0B0D12] text-xs uppercase tracking-widest font-semibold rounded shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-2 group"
+            className="w-full sm:w-auto px-8 py-3.5 bg-[#B8893B] hover:bg-[#D9B66A] text-[#0B0D12] text-xs uppercase tracking-widest font-semibold rounded shadow-lg hover:shadow-xl active:scale-[0.97] transition-all duration-300 flex items-center justify-center gap-2 group"
           >
             <span>Shop Now</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
           <Link
             href="/new-arrivals"
-            className="w-full sm:w-auto px-8 py-3.5 border border-[#FAF7F2]/40 hover:border-[#D9B66A] hover:bg-white/5 text-[#FAF7F2] hover:text-[#D9B66A] text-xs uppercase tracking-widest font-medium rounded transition-all duration-300"
+            className="w-full sm:w-auto px-8 py-3.5 border border-[#FAF7F2]/40 hover:border-[#D9B66A] hover:bg-white/5 text-[#FAF7F2] hover:text-[#D9B66A] text-xs uppercase tracking-widest font-medium rounded active:scale-[0.97] transition-all duration-300"
           >
             Explore New Arrivals
           </Link>
         </div>
 
         {/* Bottom Quick Feature Highlights */}
-        <div className="mt-12 pt-8 border-t border-white/10 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs text-[#8A8A8A]">
+        <div style={{ ["--d" as string]: "520ms" }} className="hero-rise mt-12 pt-8 border-t border-white/10 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs text-[#8A8A8A]">
           <span className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#D9B66A]" />
             Cash on Delivery Nationwide
