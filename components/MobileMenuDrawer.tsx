@@ -70,6 +70,7 @@ export default function MobileMenuDrawer() {
     { name: 'Contact & Support', href: '/contact' },
     { name: '7-Day Return Policy', href: '/policies/returns' },
     { name: 'Delivery Information', href: '/policies/delivery' },
+    { name: 'Admin Portal (Merchant)', href: '/admin' },
   ];
 
   const content = (

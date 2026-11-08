@@ -1,9 +1,15 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
 export default function FloatingWhatsApp() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
   return (
     <aside aria-label="Support and Quick Contact" className="fixed bottom-6 right-6 z-40">
       <a

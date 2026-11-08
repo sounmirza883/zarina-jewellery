@@ -37,6 +37,13 @@ export interface CustomerDetails {
   notes?: string;
 }
 
+export type OrderStatus =
+  | 'Pending Phone Confirmation'
+  | 'Confirmed'
+  | 'Dispatched'
+  | 'Delivered'
+  | 'Cancelled';
+
 export interface Order {
   orderNumber: string;
   items: CartItem[];
@@ -46,7 +53,7 @@ export interface Order {
   customer: CustomerDetails;
   createdAt: string;
   paymentMethod: 'Cash on Delivery';
-  status: 'Pending Phone Confirmation';
+  status: OrderStatus;
 }
 
 export interface CategoryMeta {

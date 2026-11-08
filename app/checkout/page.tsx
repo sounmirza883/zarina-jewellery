@@ -111,16 +111,23 @@ export default function CheckoutPage() {
         status: 'Pending Phone Confirmation',
       };
 
-      // Store order in localStorage for access on /order-success
+      // Store order in localStorage for access on /order-success and /admin
       if (typeof window !== 'undefined') {
         localStorage.setItem('zarina_last_order', JSON.stringify(newOrder));
 
-        // Append to order history list
+        // Append to customer order history
         try {
           const historyRaw = localStorage.getItem('zarina_order_history');
           const history: Order[] = historyRaw ? JSON.parse(historyRaw) : [];
           history.unshift(newOrder);
-          localStorage.setItem('zarina_order_history', JSON.stringify(history.slice(0, 10)));
+          localStorage.setItem('zarina_order_history', JSON.stringify(history.slice(0, 50)));
+
+          // Also prepend to admin orders list
+          const adminRaw = localStorage.getItem('zarina_admin_orders');
+          const adminOrders: Order[] = adminRaw ? JSON.parse(adminRaw) : [];
+          adminOrders.unshift(newOrder);
+          localStorage.setItem('zarina_admin_orders', JSON.stringify(adminOrders));
+          window.dispatchEvent(new Event('zarina_orders_updated'));
         } catch {
           // Ignore history storage errors
         }

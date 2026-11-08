@@ -1,8 +1,16 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Sparkles, Phone, Mail, MapPin, Clock, ShieldCheck, Heart } from 'lucide-react';
 import { siteConfig } from '@/config/site';
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
   return (
     <footer className="bg-[#0B0D12] text-[#FAF7F2] border-t border-[#B8893B]/30 pt-16 pb-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -98,6 +106,12 @@ export default function Footer() {
               <li>
                 <Link href="/policies/terms" className="hover:text-[#D9B66A] transition-colors">
                   Terms of Service
+                </Link>
+              </li>
+              <li className="pt-1.5 border-t border-white/10">
+                <Link href="/admin" className="text-[#D9B66A] hover:text-white transition-colors flex items-center gap-1 font-medium">
+                  <span>Merchant Admin Portal</span>
+                  <span className="text-[10px] bg-[#B8893B]/20 text-[#D9B66A] px-1.5 py-0.5 rounded">PIN</span>
                 </Link>
               </li>
             </ul>

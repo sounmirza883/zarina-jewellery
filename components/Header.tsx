@@ -34,6 +34,10 @@ export default function Header() {
     { name: 'Best Sellers', href: '/best-sellers' },
   ];
 
+  if (pathname.startsWith('/admin')) {
+    return null;
+  }
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
