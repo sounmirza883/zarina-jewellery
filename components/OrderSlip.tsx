@@ -20,7 +20,6 @@ const label: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: 1, 
 export default function OrderSlip({ order, variant }: { order: Order; variant: 'customer' | 'admin' }) {
   const isAdmin = variant === 'admin';
   const c = order.customer;
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://zarinajewels.pk';
   const placed = new Date(order.createdAt).toLocaleString('en-PK', {
     year: 'numeric',
     month: 'short',
@@ -162,18 +161,6 @@ export default function OrderSlip({ order, variant }: { order: Order; variant: '
 
       {isAdmin ? (
         <>
-          {(order.courier || order.trackingNumber) && (
-            <div style={{ marginTop: 14, fontSize: 12 }}>
-              <strong>Courier:</strong> {order.courier ?? 'Not assigned'}
-              {order.trackingNumber && (
-                <>
-                  {' '}
-                  &nbsp;|&nbsp; <strong>Tracking:</strong> <span style={{ fontFamily: 'monospace' }}>{order.trackingNumber}</span>
-                </>
-              )}
-            </div>
-          )}
-
           <div style={{ marginTop: 16, border: `2px dashed ${INK}`, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, fontSize: 11 }}>
@@ -199,10 +186,6 @@ export default function OrderSlip({ order, variant }: { order: Order; variant: '
           <div>
             Our team will call or WhatsApp you within 24 hours to confirm your delivery address. You pay the courier
             in cash when the parcel arrives.
-          </div>
-          <div style={{ marginTop: 6 }}>
-            Track your order any time at <strong>{origin}/track-order</strong> with order number{' '}
-            <strong style={{ fontFamily: 'monospace' }}>{order.orderNumber}</strong> and the phone number above.
           </div>
         </div>
       )}

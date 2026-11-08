@@ -71,7 +71,6 @@ export default function MobileMenuDrawer() {
     signedIn
       ? { name: 'My Account & Orders', href: '/account' }
       : { name: 'Log In / Create Account', href: '/login' },
-    { name: 'Track My Order', href: '/track-order' },
     { name: 'Our Story & Heritage', href: '/about' },
     { name: 'Contact & Support', href: '/contact' },
     { name: '7-Day Return Policy', href: '/policies/returns' },

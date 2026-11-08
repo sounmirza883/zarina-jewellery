@@ -89,12 +89,6 @@ export type OrderStatus =
   | 'Delivered'
   | 'Cancelled';
 
-export interface OrderEvent {
-  status: OrderStatus;
-  note?: string;
-  at: string; // ISO timestamp
-}
-
 export interface Order {
   orderNumber: string;
   items: CartItem[];
@@ -106,28 +100,6 @@ export interface Order {
   paymentMethod: 'Cash on Delivery';
   status: OrderStatus;
   userId?: string | null;
-  courier?: string | null;
-  trackingNumber?: string | null;
-  events?: OrderEvent[];
-}
-
-/** What the public tracking lookup returns (no address, no phone). */
-export interface TrackedOrder {
-  orderNumber: string;
-  status: OrderStatus;
-  createdAt: string;
-  courier?: string | null;
-  trackingNumber?: string | null;
-  total: number;
-  city?: string;
-  items: { name: string; variantLabel?: string; quantity: number }[];
-  events: OrderEvent[];
-}
-
-export interface Courier {
-  name: string;
-  /** Link template; {tracking} is replaced by the tracking number. Empty = no link. */
-  trackingUrl: string;
 }
 
 export interface Review {

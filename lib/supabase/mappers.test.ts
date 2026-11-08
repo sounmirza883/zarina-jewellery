@@ -60,7 +60,7 @@ test('rowToProduct without embedded variants gives an empty variant list and fal
   assert.equal(p.salePrice, undefined);
 });
 
-test('rowToOrder keeps tracking fields and orders the timeline oldest first', () => {
+test('rowToOrder maps the snake_case row to the app order', () => {
   const row: OrderRow = {
     order_number: 'ZJ-123456',
     items: [],
@@ -71,17 +71,11 @@ test('rowToOrder keeps tracking fields and orders the timeline oldest first', ()
     status: 'Dispatched',
     created_at: '2026-11-01T10:00:00Z',
     user_id: null,
-    courier: 'TCS',
-    tracking_number: '12345',
-    order_events: [
-      { status: 'Dispatched', note: 'Courier: TCS', created_at: '2026-11-02T10:00:00Z' },
-      { status: 'Pending Phone Confirmation', note: null, created_at: '2026-11-01T10:00:00Z' },
-    ],
   };
   const o = rowToOrder(row);
-  assert.equal(o.courier, 'TCS');
-  assert.equal(o.trackingNumber, '12345');
-  assert.deepEqual(o.events?.map((e) => e.status), ['Pending Phone Confirmation', 'Dispatched']);
-  assert.equal(o.events?.[0].note, undefined);
-  assert.equal(rowToOrder({ ...row, order_events: undefined }).events, undefined);
+  assert.equal(o.orderNumber, 'ZJ-123456');
+  assert.equal(o.status, 'Dispatched');
+  assert.equal(o.createdAt, '2026-11-01T10:00:00Z');
+  assert.equal(o.paymentMethod, 'Cash on Delivery');
+  assert.equal(o.userId, null);
 });

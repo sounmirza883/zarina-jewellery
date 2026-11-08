@@ -50,8 +50,6 @@ import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { fetchReviews } from '@/lib/admin-reviews';
 import ProductFormModal from '@/components/admin/ProductFormModal';
 import ReviewsTab from '@/components/admin/ReviewsTab';
-import OrderDispatchPanel from '@/components/admin/OrderDispatchPanel';
-import CouriersEditor from '@/components/admin/CouriersEditor';
 import OrderPdfButton from '@/components/OrderPdfButton';
 import ProductImage from '@/components/ProductImage';
 import AdminOrderChart from '@/components/AdminOrderChart';
@@ -190,12 +188,6 @@ export default function AdminPortalPage() {
       .then((r) => setPendingReviews(r.filter((review) => review.status === 'pending').length))
       .catch(() => {});
   }, []);
-
-  // Order changed by the dispatch panel (courier, tracking number, status): keep list and modal in step.
-  const handleOrderPatched = (orderNumber: string, patch: Partial<Order>) => {
-    setOrders((prev) => prev.map((o) => (o.orderNumber === orderNumber ? { ...o, ...patch } : o)));
-    setSelectedOrderForModal((cur) => (cur && cur.orderNumber === orderNumber ? { ...cur, ...patch } : cur));
-  };
 
   // --- STATS OVERVIEW ---
   const stats = useMemo(() => {
@@ -1294,11 +1286,6 @@ export default function AdminPortalPage() {
                   />
                 </div>
 
-                <CouriersEditor
-                  couriers={settings.couriers}
-                  onChange={(couriers) => setSettings({ ...settings, couriers })}
-                />
-
                 <div className="pt-4 border-t border-[#E8DDD0] flex items-center justify-end gap-3">
                   <button
                     type="submit"
@@ -1481,15 +1468,6 @@ export default function AdminPortalPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              {/* Courier, tracking number and status timeline */}
-              <div className="no-print py-2">
-                <OrderDispatchPanel
-                  order={selectedOrderForModal}
-                  couriers={settings.couriers}
-                  onUpdated={(patch) => handleOrderPatched(selectedOrderForModal.orderNumber, patch)}
-                />
               </div>
 
               {/* Order Totals */}

@@ -12,9 +12,8 @@
 --   product_variants  colour/size combinations with SKU, price, stock, image
 --   reviews           customer reviews, hidden until the admin approves them
 --   profiles          customer accounts (name, phone, saved address)
---   orders            + customer link, courier, tracking number
---   order_events      order status timeline used for tracking
---   store_settings    shipping rules, announcement bar, couriers
+--   orders            + customer link
+--   store_settings    shipping rules, announcement bar
 --   product-images    Storage bucket for admin image uploads
 --
 -- After running it
@@ -38,15 +37,13 @@
 --   reviews           public sees approved ones only; visitors add reviews through
 --                     submit_review(); admin approves or deletes
 --   orders            visitors have NO direct access: they place orders through
---                     place_order() and look one up with track_order() (order number
---                     + phone). Signed-in customers can read their own orders.
+--                     place_order(). Signed-in customers can read their own orders.
 --                     Only the admin can change or delete orders.
 --   profiles          each customer reads/edits only their own row
 --
 -- Calls the app makes
 --   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...} })
 --   rpc('submit_review', { p_product_id, p_rating, p_author, p_title, p_body, p_hp })
---   rpc('track_order',   { p_order_number, p_phone })
 --   rpc('save_product',  { p_product: {...}, p_variants: [...] })      -- admin only
 -- place_order also still accepts the older { productId, color, size, quantity } lines.
 --
@@ -273,27 +270,14 @@ create table if not exists public.profiles (
 
 
 -- ---------------------------------------------------------------------
--- 8. Orders: customer link, courier, tracking + status timeline
+-- 8. Orders: link to the customer account
 -- ---------------------------------------------------------------------
 
 alter table public.orders
-  add column if not exists user_id         uuid references auth.users (id) on delete set null,
-  add column if not exists courier         text check (courier is null or length(courier) <= 60),
-  add column if not exists tracking_number text check (tracking_number is null or length(tracking_number) <= 80);
+  add column if not exists user_id uuid references auth.users (id) on delete set null;
 
 create index if not exists orders_user_idx
   on public.orders (user_id, created_at desc) where user_id is not null;
-
-create table if not exists public.order_events (
-  id           bigint generated always as identity primary key,
-  order_number text not null references public.orders (order_number) on delete cascade,
-  status       text not null,
-  note         text,
-  created_at   timestamptz not null default now()
-);
-
-create index if not exists order_events_order_idx
-  on public.order_events (order_number, created_at);
 
 
 -- ---------------------------------------------------------------------
@@ -303,17 +287,6 @@ create index if not exists order_events_order_idx
 insert into public.store_settings (id, data)
 values (true, '{"flatShippingRate": 250, "freeShippingThreshold": 3500}'::jsonb)
 on conflict (id) do nothing;
-
--- Courier list for the tracking page. Fill in each courier's tracking link in the admin
--- Settings tab, using {tracking} where the tracking number goes. Left empty on purpose:
--- check each courier's current public tracking URL before filling it in.
-update public.store_settings
-   set data = jsonb_set(
-         data,
-         '{couriers}',
-         '[{"name": "TCS", "trackingUrl": ""}, {"name": "Leopards", "trackingUrl": ""}, {"name": "Trax", "trackingUrl": ""}]'::jsonb
-       )
- where data -> 'couriers' is null;
 
 -- Seed products (data/products.ts). Existing rows are left untouched.
 insert into public.products
@@ -380,12 +353,6 @@ select product_id || '-v' || n,
        n
   from combos
 on conflict do nothing;
-
--- Timeline entry for orders that already exist.
-insert into public.order_events (order_number, status, note, created_at)
-select o.order_number, o.status, 'Order placed', o.created_at
-  from public.orders o
- where not exists (select 1 from public.order_events e where e.order_number = o.order_number);
 
 -- Profile rows for accounts that already exist (for example the admin).
 insert into public.profiles (id, full_name)
@@ -520,45 +487,6 @@ drop trigger if exists profiles_touch_trg on public.profiles;
 create trigger profiles_touch_trg
   before update on public.profiles
   for each row execute function public.profiles_touch();
-
--- Order timeline: one event when an order is placed, one per status / courier / tracking change.
-create or replace function public.orders_log_event()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_note text;
-begin
-  if tg_op = 'INSERT' then
-    insert into public.order_events (order_number, status, note)
-    values (new.order_number, new.status, 'Order placed');
-  else
-    v_note := nullif(concat_ws(' ',
-      case when coalesce(new.courier, '') <> '' then 'Courier: ' || new.courier end,
-      case when coalesce(new.tracking_number, '') <> '' then 'Tracking: ' || new.tracking_number end
-    ), '');
-    insert into public.order_events (order_number, status, note)
-    values (new.order_number, new.status, v_note);
-  end if;
-  return null;
-end;
-$$;
-
-drop trigger if exists orders_log_insert_trg on public.orders;
-create trigger orders_log_insert_trg
-  after insert on public.orders
-  for each row execute function public.orders_log_event();
-
-drop trigger if exists orders_log_update_trg on public.orders;
-create trigger orders_log_update_trg
-  after update of status, courier, tracking_number on public.orders
-  for each row
-  when (old.status is distinct from new.status
-        or old.courier is distinct from new.courier
-        or old.tracking_number is distinct from new.tracking_number)
-  execute function public.orders_log_event();
 
 -- Put an order's quantities back (p_sign = 1) or take them out again (p_sign = -1).
 -- Items without a variantId (orders placed before variants existed) and variants that were
@@ -988,68 +916,7 @@ $$;
 
 
 -- ---------------------------------------------------------------------
--- 15. Track an order (order number + the phone number used on the order)
---     Returns no address and no phone. Any mismatch gives the same message.
--- ---------------------------------------------------------------------
-
-create or replace function public.track_order(p_order_number text, p_phone text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_order  public.orders;
-  v_key    text;
-  v_events jsonb;
-  v_items  jsonb;
-begin
-  v_key := right(regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g'), 10);
-
-  select * into v_order
-    from public.orders o
-   where o.order_number = upper(trim(coalesce(p_order_number, '')));
-
-  if not found
-     or length(v_key) < 10
-     or right(regexp_replace(coalesce(v_order.customer ->> 'phone', ''), '[^0-9]', '', 'g'), 10) <> v_key then
-    raise exception 'We could not find an order with those details.';
-  end if;
-
-  select coalesce(
-           jsonb_agg(jsonb_strip_nulls(jsonb_build_object('status', e.status, 'note', e.note, 'at', e.created_at))
-                     order by e.created_at, e.id),
-           '[]'::jsonb)
-    into v_events
-    from public.order_events e
-   where e.order_number = v_order.order_number;
-
-  select coalesce(
-           jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-             'name',         i -> 'product' ->> 'name',
-             'variantLabel', i ->> 'variantLabel',
-             'quantity',     (i ->> 'quantity')::integer))),
-           '[]'::jsonb)
-    into v_items
-    from jsonb_array_elements(v_order.items) i;
-
-  return jsonb_build_object(
-    'orderNumber',    v_order.order_number,
-    'status',         v_order.status,
-    'createdAt',      v_order.created_at,
-    'courier',        v_order.courier,
-    'trackingNumber', v_order.tracking_number,
-    'total',          v_order.total,
-    'city',           v_order.customer ->> 'city',
-    'items',          v_items,
-    'events',         v_events
-  );
-end;
-$$;
-
-
--- ---------------------------------------------------------------------
--- 16. Save a product and its variants in one transaction (admin only)
+-- 15. Save a product and its variants in one transaction (admin only)
 --     SECURITY INVOKER on purpose: Row Level Security still applies, and the
 --     is_admin() check below gives a clear error instead of a silent no-op.
 --     Variants missing from p_variants are deactivated, never deleted.
@@ -1279,7 +1146,7 @@ revoke all on function public.products_cascade_price() from public, anon, authen
 
 
 -- ---------------------------------------------------------------------
--- 17. Row Level Security
+-- 16. Row Level Security
 -- ---------------------------------------------------------------------
 
 alter table public.products         enable row level security;
@@ -1287,7 +1154,6 @@ alter table public.product_variants enable row level security;
 alter table public.reviews          enable row level security;
 alter table public.profiles         enable row level security;
 alter table public.orders           enable row level security;
-alter table public.order_events     enable row level security;
 alter table public.store_settings   enable row level security;
 
 -- products
@@ -1345,17 +1211,6 @@ drop policy if exists orders_owner_read on public.orders;
 create policy orders_owner_read on public.orders
   for select to authenticated using (user_id = (select auth.uid()));
 
--- order_events: the admin, or the customer who owns the order
-drop policy if exists order_events_read on public.order_events;
-create policy order_events_read on public.order_events
-  for select to authenticated
-  using (
-    (select public.is_admin())
-    or exists (select 1 from public.orders o
-                where o.order_number = order_events.order_number
-                  and o.user_id = (select auth.uid()))
-  );
-
 -- store_settings
 drop policy if exists settings_read on public.store_settings;
 create policy settings_read on public.store_settings
@@ -1369,11 +1224,11 @@ create policy settings_admin_write on public.store_settings
 
 
 -- ---------------------------------------------------------------------
--- 18. Grants (explicit; reset first because new Supabase tables may auto-grant)
+-- 17. Grants (explicit; reset first because new Supabase tables may auto-grant)
 -- ---------------------------------------------------------------------
 
 revoke all on public.products, public.product_variants, public.reviews, public.profiles,
-              public.orders, public.order_events, public.store_settings
+              public.orders, public.store_settings
   from anon, authenticated;
 
 grant select on public.products, public.product_variants, public.store_settings to anon, authenticated;
@@ -1388,12 +1243,10 @@ grant update, delete on public.reviews to authenticated;
 grant select, insert, update on public.profiles to authenticated;
 
 grant select, update, delete on public.orders to authenticated;
-grant select on public.order_events to authenticated;
 
 -- Functions. Supabase grants EXECUTE to anon/authenticated by default, so reset each one.
 revoke all on function public.place_order(jsonb, jsonb)                              from public, anon, authenticated;
 revoke all on function public.submit_review(text, integer, text, text, text, text)   from public, anon, authenticated;
-revoke all on function public.track_order(text, text)                                from public, anon, authenticated;
 revoke all on function public.save_product(jsonb, jsonb)                             from public, anon, authenticated;
 revoke all on function public.product_json(public.products)                          from public, anon, authenticated;
 revoke all on function public.adjust_order_stock(jsonb, integer)                     from public, anon, authenticated;
@@ -1402,19 +1255,17 @@ revoke all on function public.products_price_sync()                             
 revoke all on function public.reviews_rating_sync()                                  from public, anon, authenticated;
 revoke all on function public.handle_new_user()                                      from public, anon, authenticated;
 revoke all on function public.profiles_touch()                                       from public, anon, authenticated;
-revoke all on function public.orders_log_event()                                     from public, anon, authenticated;
 revoke all on function public.orders_restock()                                       from public, anon, authenticated;
 
 grant execute on function public.place_order(jsonb, jsonb)                            to anon, authenticated;
 grant execute on function public.submit_review(text, integer, text, text, text, text) to anon, authenticated;
-grant execute on function public.track_order(text, text)                              to anon, authenticated;
 grant execute on function public.save_product(jsonb, jsonb)                           to authenticated;
 grant execute on function public.jsonb_text_array(jsonb)                              to authenticated;
 grant execute on function public.is_admin()                                           to anon, authenticated;
 
 
 -- ---------------------------------------------------------------------
--- 19. Storage: product images (public to view, admin-only to change)
+-- 18. Storage: product images (public to view, admin-only to change)
 -- ---------------------------------------------------------------------
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

@@ -79,11 +79,6 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2.5 text-xs tracking-wide text-[#CCCCCC]">
               <li>
-                <Link href="/track-order" className="hover:text-[#D9B66A] transition-colors">
-                  Track Your Order
-                </Link>
-              </li>
-              <li>
                 <Link href="/about" className="hover:text-[#D9B66A] transition-colors">
                   Our Story & Promise
                 </Link>

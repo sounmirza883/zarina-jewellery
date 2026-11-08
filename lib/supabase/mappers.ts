@@ -1,6 +1,5 @@
 import type {
   Order,
-  OrderEvent,
   OrderStatus,
   Product,
   ProductAttribute,
@@ -56,12 +55,6 @@ export interface ProductRow {
   product_variants?: VariantRow[] | null;
 }
 
-export interface OrderEventRow {
-  status: OrderStatus;
-  note: string | null;
-  created_at: string;
-}
-
 export interface OrderRow {
   order_number: string;
   items: Order['items'];
@@ -72,10 +65,6 @@ export interface OrderRow {
   status: OrderStatus;
   created_at: string;
   user_id: string | null;
-  courier: string | null;
-  tracking_number: string | null;
-  /** Present when queried with select('*, order_events(*)'). */
-  order_events?: (OrderEventRow & { id?: number })[] | null;
 }
 
 export interface ReviewRow {
@@ -144,12 +133,6 @@ export const rowToProduct = (r: ProductRow): Product => ({
   updatedAt: r.updated_at ?? undefined,
 });
 
-export const rowToEvent = (r: OrderEventRow): OrderEvent => ({
-  status: r.status,
-  note: r.note ?? undefined,
-  at: r.created_at,
-});
-
 export const rowToOrder = (r: OrderRow): Order => ({
   orderNumber: r.order_number,
   items: r.items,
@@ -161,11 +144,6 @@ export const rowToOrder = (r: OrderRow): Order => ({
   paymentMethod: 'Cash on Delivery',
   status: r.status,
   userId: r.user_id,
-  courier: r.courier,
-  trackingNumber: r.tracking_number,
-  events: r.order_events
-    ? [...r.order_events].map(rowToEvent).sort((a, b) => a.at.localeCompare(b.at))
-    : undefined,
 });
 
 export const rowToReview = (r: ReviewRow): Review => ({

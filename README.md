@@ -32,10 +32,9 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ```
 ├── app/
 │   ├── about/page.tsx               # Brand story, mission, and CEO letter
-│   ├── account/                     # Customer account: profile and order history (PDF + tracking)
+│   ├── account/                     # Customer account: profile and order history (order PDF)
 │   ├── auth/callback/route.ts       # Email confirmation and password-reset callback
 │   ├── login/, signup/, forgot-password/, reset-password/   # Customer sign-in pages
-│   ├── track-order/page.tsx         # Public order tracking (order number + phone)
 │   ├── best-sellers/page.tsx        # Customer favorites catalog
 │   ├── cart/page.tsx                # Dedicated bag page with line items & totals
 │   ├── category/[slug]/page.tsx     # Filtered by category (earrings, necklaces, etc.)
@@ -54,9 +53,8 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── sitemap.ts                   # Dynamic XML sitemap
 │   └── shop/page.tsx                # Shop all catalogue with search, sort, and price filters
 ├── components/
-│   ├── admin/                       # Product editor, variants, image upload, reviews tab, dispatch panel, couriers
+│   ├── admin/                       # Product editor, variants, image upload, reviews tab
 │   ├── OrderSlip.tsx, OrderPdfButton.tsx   # Customer order PDF and admin COD dispatch slip PDF
-│   ├── OrderTimeline.tsx            # Order status timeline (tracking page, account, admin)
 │   ├── ReviewsSection.tsx, StarRating.tsx  # Reviews list, submit form and stars
 │   ├── BrandStoryBlock.tsx          # Home page brand narrative
 │   ├── CartDrawer.tsx               # Slide-out shopping bag drawer
@@ -82,11 +80,11 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ├── lib/
 │   ├── api.ts                       # Server-side reads of products & settings (Supabase, static fallback)
 │   ├── admin-store.ts               # Admin dashboard calls (login, orders, products, settings)
-│   ├── settings.ts                  # Admin settings type and defaults (shipping, announcement, couriers)
+│   ├── settings.ts                  # Admin settings type and defaults (shipping, announcement)
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
 │   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
-│   ├── account.ts, tracking.ts, order-pdf.ts, seo.ts, reviews-api.ts   # Accounts, tracking, PDFs, JSON-LD, reviews
+│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts   # Accounts, PDFs, JSON-LD, reviews
 │   └── *.test.ts                    # Node built-in unit tests (node:test)
 ├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
@@ -124,7 +122,7 @@ Stock goes down automatically when an order is placed and comes back if the orde
 ---
 
 ## 🔌 Supabase setup
-Products (with variants and stock), reviews, customer accounts, orders, order tracking, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
+Products (with variants and stock), reviews, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Run the SQL first, before deploying this code.** Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again and never deletes existing data.
 3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
@@ -133,13 +131,12 @@ Products (with variants and stock), reviews, customer accounts, orders, order tr
 6. Before real customers sign up, connect your own email provider under **Authentication -> Emails -> SMTP**; Supabase's built-in sender allows only a few emails per hour.
 7. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
 8. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js`, `@supabase/ssr`, `jspdf` and `html2canvas-pro` packages.
-9. In the admin **Settings** tab, fill in each courier's tracking link (use `{tracking}` where the tracking number goes) so customers get a "Track with courier" link.
 
-Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout, accounts, reviews, tracking and the admin dashboard need Supabase.
+Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout, accounts, reviews and the admin dashboard need Supabase.
 
-**Order PDFs and tracking**: after checkout the customer can download an order PDF and track the order at `/track-order` with the order number and phone number. In the admin order window you can download the COD dispatch slip as a PDF or print it, set the courier and tracking number, and see the status timeline.
+**Order PDFs**: after checkout the customer can download an order PDF. In the admin order window you can download the COD dispatch slip as a PDF or print it.
 
-**Known limits**: reviews and tracking lookups have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
+**Known limits**: review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
 
 ---
 
@@ -148,10 +145,10 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, JSON-LD, tracking links and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash
 npx --yes tsx --test lib/*.test.ts lib/supabase/*.test.ts
 ```
-The SQL in `supabase/schema.sql` cannot be unit tested here; run it on a Supabase project and place a test order, review and tracking lookup.
+The SQL in `supabase/schema.sql` cannot be unit tested here; run it on a Supabase project and place a test order and a review.

@@ -8,7 +8,6 @@ import {
   Package,
   Phone,
   MessageCircle,
-  Truck,
   ArrowRight,
   ShieldCheck,
   Calendar,
@@ -187,13 +186,6 @@ function OrderSuccessContent() {
               label="Download Order PDF"
             />
           )}
-          <Link
-            href={`/track-order?order=${encodeURIComponent(activeOrderNumber)}`}
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 border border-[#0B0D12] text-[#0B0D12] hover:bg-[#FAF7F2] text-xs uppercase tracking-widest font-semibold rounded transition-colors w-full sm:w-auto"
-          >
-            <Truck className="w-4 h-4" />
-            <span>Track This Order</span>
-          </Link>
           <Link
             href="/shop"
             className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-[#0B0D12] hover:bg-[#B8893B] text-white text-xs uppercase tracking-widest font-semibold rounded transition-colors shadow w-full sm:w-auto"

@@ -113,7 +113,7 @@ export async function fetchMyOrders(): Promise<Order[]> {
   if (!user) return [];
   const { data, error } = await createClient()
     .from('orders')
-    .select('*, order_events(*)')
+    .select('*')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(50);

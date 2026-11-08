@@ -9,7 +9,6 @@ import {
   Menu,
   X,
   Sparkles,
-  Truck,
   User,
   LogIn,
   UserPlus,
@@ -171,7 +170,7 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                 <span className="tracking-wide">Search</span>
               </button>
 
-              {/* Account menu: Track Order lives here. The icon is the same size for everyone, so the bar does not shift. */}
+              {/* Account menu. The icon is the same size for everyone, so the bar does not shift. */}
               <NavMenu
                 label="Account menu"
                 align="right"
@@ -188,10 +187,6 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                       <Link href="/account/orders" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
                         <Package className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
                         My Orders
-                      </Link>
-                      <Link href="/track-order" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
-                        <Truck className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
-                        Track Order
                       </Link>
                       <div className="mt-1.5 pt-1.5 border-t border-[#E8DDD0]">
                         <button
@@ -217,12 +212,6 @@ export default function Header({ announcement }: { announcement: { enabled: bool
                         <UserPlus className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
                         Create account
                       </Link>
-                      <div className="mt-1.5 pt-1.5 border-t border-[#E8DDD0]">
-                        <Link href="/track-order" onClick={close} className={`${MENU_ITEM} text-[#1F1F1F]`}>
-                          <Truck className="w-4 h-4 text-[#B8893B]" aria-hidden="true" />
-                          Track Order
-                        </Link>
-                      </div>
                     </>
                   )
                 }

@@ -3,10 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { PackageSearch } from 'lucide-react';
 import AuthShell, { FormError } from '@/components/AuthShell';
 import AccountNav from '@/components/AccountNav';
-import OrderTimeline from '@/components/OrderTimeline';
 import OrderPdfButton from '@/components/OrderPdfButton';
 import { NOT_CONFIGURED, fetchMyOrders, getCurrentUser } from '@/lib/account';
 import { lineUnitPrice } from '@/lib/pricing';
@@ -115,33 +113,8 @@ export default function MyOrdersPage() {
                     <span className="text-[#B8893B]">{formatPKR(order.total)}</span>
                   </div>
 
-                  {order.courier && (
-                    <p className="text-xs text-[#575757]">
-                      Courier: <strong>{order.courier}</strong>
-                      {order.trackingNumber ? ` • Tracking: ${order.trackingNumber}` : ''}
-                    </p>
-                  )}
-
-                  {order.events && order.events.length > 0 && (
-                    <details className="text-xs">
-                      <summary className="cursor-pointer font-semibold uppercase tracking-wider text-[#1F1F1F]">
-                        Order progress
-                      </summary>
-                      <div className="mt-3">
-                        <OrderTimeline events={order.events} />
-                      </div>
-                    </details>
-                  )}
-
                   <div className="flex flex-wrap gap-2">
                     <OrderPdfButton order={order} variant="customer" />
-                    <Link
-                      href={`/track-order?order=${encodeURIComponent(order.orderNumber)}`}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 border border-[#E8DDD0] hover:border-[#B8893B] text-[#1F1F1F] text-xs font-semibold uppercase tracking-wider rounded-md transition-colors"
-                    >
-                      <PackageSearch className="w-4 h-4" />
-                      <span>Track Order</span>
-                    </Link>
                   </div>
                 </li>
               ))}

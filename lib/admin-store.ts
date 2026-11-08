@@ -102,7 +102,7 @@ export async function adminSignOut(): Promise<void> {
 export async function fetchOrders(): Promise<Order[]> {
   const { data, error } = await createClient()
     .from('orders')
-    .select('*, order_events(*)')
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(500);
   check(error);
@@ -224,7 +224,7 @@ export async function fetchSettings(): Promise<AdminSettings> {
   return { ...DEFAULT_SETTINGS, ...(data?.data ?? {}) };
 }
 
-// Sends the whole settings object (including couriers), so callers must pass every field.
+// Sends the whole settings object, so callers must pass every field.
 export async function saveStoreSettings(settings: AdminSettings): Promise<void> {
   const { error } = await createClient().from('store_settings').upsert({ id: true, data: settings });
   check(error);
