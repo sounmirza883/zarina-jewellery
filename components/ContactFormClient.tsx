@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { isValidPakistaniPhone } from '@/lib/shop-logic';
+import { submitContact } from '@/lib/contact-api';
+import { siteConfig } from '@/config/site';
 
 const contactSchema = z.object({
   fullName: z.string().min(3, { message: 'Please enter your name' }),
@@ -24,6 +26,9 @@ type ContactFormValues = z.infer<typeof contactSchema>;
 
 export default function ContactFormClient() {
   const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState('');
+  // Hidden field: real visitors never see it, bots tend to fill it in.
+  const [honeypot, setHoneypot] = useState('');
 
   const {
     register,
@@ -41,9 +46,13 @@ export default function ContactFormClient() {
     },
   });
 
-  const onSubmit = async () => {
-    // Frontend-only simulation
-    await new Promise((resolve) => setTimeout(resolve, 800));
+  const onSubmit = async (values: ContactFormValues) => {
+    setServerError('');
+    const error = await submitContact(values, honeypot);
+    if (error) {
+      setServerError(error);
+      return;
+    }
     setSubmitted(true);
     reset();
   };
@@ -76,6 +85,17 @@ export default function ContactFormClient() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+            />
+          </div>
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
               Your Name <span className="text-[#991B1B]">*</span>
@@ -177,6 +197,23 @@ export default function ContactFormClient() {
               </p>
             )}
           </div>
+
+          {serverError && (
+            <div role="alert" className="p-3 rounded-lg border border-[#991B1B]/30 bg-rose-50 text-xs text-[#991B1B] space-y-1">
+              <p className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{serverError}</span>
+              </p>
+              <a
+                href={siteConfig.contact.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block font-semibold underline underline-offset-2 hover:text-[#0B0D12]"
+              >
+                Message us on WhatsApp instead
+              </a>
+            </div>
+          )}
 
           <button
             type="submit"
