@@ -60,7 +60,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── BrandStoryBlock.tsx          # Home page brand narrative
 │   ├── CartDrawer.tsx               # Slide-out shopping bag drawer
 │   ├── CategoryTiles.tsx            # 4 category cards
-│   ├── ContactFormClient.tsx        # Validated contact form
+│   ├── ContactFormClient.tsx        # Contact form: saves each message to the database
 │   ├── FloatingWhatsApp.tsx         # Persistent WhatsApp button
 │   ├── Footer.tsx                   # Luxury navy footer
 │   ├── Header.tsx                   # Top announcement, logo, search, and navigation
@@ -123,7 +123,7 @@ Stock goes down automatically when an order is placed and comes back if the orde
 ---
 
 ## 🔌 Supabase setup
-Products (with variants and stock), reviews, coupons, wishlists, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
+Products (with variants and stock), reviews, coupons, wishlists, contact messages, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Run the SQL first, before deploying this code.** Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again and never deletes existing data.
 3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
@@ -141,7 +141,9 @@ Without the env vars the storefront falls back to the static products in `/data/
 
 **Wishlist**: customers tap the heart on a product card or product page to save a piece; the header heart shows the count and `/wishlist` lists the saved pieces. The list is kept in the browser (works without an account). When a customer signs in, their browser list is merged into their account (`wishlist_items` table, `wishlist_merge()` function in `supabase/schema.sql`) and loaded on their other devices; signing out clears a list that came from an account. Run the updated `supabase/schema.sql` for the account sync; the browser wishlist works without it.
 
-**Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
+**Contact messages**: the Contact Us form saves each message in the `contact_messages` table through `submit_contact()` in `supabase/schema.sql` (spam guards: a hidden honeypot field, a limit of 3 messages per phone number per hour, no repeat of the same text). In the admin **Messages** tab the team sees new messages (with a count in the sidebar), taps **WhatsApp** to open a chat with the sender's number (greeting ready to send) or **Call**, and marks the message handled. Run the updated `supabase/schema.sql` before deploying; until then the form shows a "could not send" message with a WhatsApp link instead of a fake thank-you. There is no email or push alert when a message arrives.
+
+**Known limits**: coupon checks, contact messages and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
 
 ---
 
@@ -150,7 +152,7 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, JSON-LD and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, WhatsApp links, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash
