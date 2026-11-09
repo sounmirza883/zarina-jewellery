@@ -1,4 +1,5 @@
 import type {
+  ContactMessage,
   Coupon,
   Order,
   OrderStatus,
@@ -68,6 +69,17 @@ export interface OrderRow {
   user_id: string | null;
   discount: number;
   coupon_code: string | null;
+}
+
+export interface ContactMessageRow {
+  id: string;
+  full_name: string;
+  phone: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'handled';
+  created_at: string;
 }
 
 export interface CouponRow {
@@ -164,6 +176,17 @@ export const rowToOrder = (r: OrderRow): Order => ({
   userId: r.user_id,
   discount: r.discount ?? 0,
   couponCode: r.coupon_code,
+});
+
+export const rowToContactMessage = (r: ContactMessageRow): ContactMessage => ({
+  id: r.id,
+  fullName: r.full_name,
+  phone: r.phone,
+  email: r.email ?? '',
+  subject: r.subject,
+  message: r.message,
+  status: r.status,
+  createdAt: r.created_at,
 });
 
 export const rowToCoupon = (r: CouponRow): Coupon => ({

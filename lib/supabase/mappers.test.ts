@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { rowToProduct, rowToOrder, rowToCoupon, type ProductRow, type OrderRow } from './mappers';
+import { rowToProduct, rowToOrder, rowToCoupon, rowToContactMessage, type ProductRow, type OrderRow } from './mappers';
 
 const productRow = (o: Partial<ProductRow> = {}): ProductRow => ({
   id: 'zj-1',
@@ -111,4 +111,22 @@ test('rowToCoupon maps the row and turns nulls into missing optional fields', ()
   assert.equal(c.expiresAt, '2026-12-01T00:00:00Z');
   assert.equal(c.usageLimit, undefined);
   assert.equal(c.oncePerCustomer, true);
+});
+
+test('rowToContactMessage maps the row and keeps an empty email as an empty string', () => {
+  const m = rowToContactMessage({
+    id: 'm1',
+    full_name: 'Ayesha Khan',
+    phone: '03001234567',
+    email: '',
+    subject: 'Noor set',
+    message: 'Is it available in ruby red?',
+    status: 'new',
+    created_at: '2026-11-09T10:00:00Z',
+  });
+  assert.equal(m.fullName, 'Ayesha Khan');
+  assert.equal(m.phone, '03001234567');
+  assert.equal(m.email, '');
+  assert.equal(m.status, 'new');
+  assert.equal(m.createdAt, '2026-11-09T10:00:00Z');
 });
