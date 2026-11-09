@@ -75,7 +75,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ├── config/
 │   └── site.ts                      # Central brand configuration, contact, shipping rates
 ├── constants/
-│   └── verse.ts                     # Surah Al-A'raf 7:31 live Arabic & Urdu text
+│   └── verse.ts                     # Surah As-Sajdah 32:7 live Arabic & Urdu text
 ├── data/
 │   └── products.ts                  # Mock products with materials & category definitions
 ├── lib/

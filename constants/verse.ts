@@ -2,7 +2,7 @@
  * Sacred Verse Constant for Hero Section
  * 
  * DEVELOPER NOTICE:
- * Please verify the Arabic text and vowel markings (tashkeel) against Quran.com (Surah Al-A'raf 7:31)
+ * Please verify the Arabic text and vowel markings (tashkeel) against Quran.com (Surah As-Sajdah 32:7)
  * before production launch to ensure 100% orthographic and typographical accuracy.
  * 
  * Strict Guideline:
@@ -20,9 +20,9 @@ export interface QuranVerse {
 }
 
 export const HERO_VERSE: QuranVerse = {
-  surahNameArabic: "سورۃ الاعراف: 31",
-  surahNameEnglish: "Surah Al-A’raf 7:31",
-  referenceLabel: "Surah Al-A’raf 7:31 (سورۃ الاعراف: 31)",
-  arabicText: "يَا بَنِي آدَمَ خُذُوا زِينَتَكُمْ عِندَ كُلِّ مَسْجِدٍ",
-  urduText: "اے اولادِ آدم! ہر نماز کے وقت اپنی زینت اختیار کرو۔",
+  surahNameArabic: "سورۃ السجدہ: 7",
+  surahNameEnglish: "Surah As-Sajdah 32:7",
+  referenceLabel: "Surah As-Sajdah 32:7 (سورۃ السجدہ: 7)",
+  arabicText: "الَّذِي أَحْسَنَ كُلَّ شَيْءٍ خَلَقَهُ",
+  urduText: "جس نے ہر چیز کو خوبصورت بنایا جو اس نے پیدا کی۔",
 };
