@@ -15,6 +15,7 @@
 --   orders            + customer link, coupon discount
 --   coupons           discount coupons (percent, fixed amount, free delivery)
 --   wishlist_items    each customer's saved products (signed-in customers only)
+--   contact_messages  messages sent from the Contact Us form, read in the admin
 --   store_settings    shipping rules, announcement bar
 --   product-images    Storage bucket for admin image uploads
 --
@@ -38,6 +39,7 @@
 --   products, product_variants, store_settings   public read, admin write
 --   coupons           admin only; customers check a code with validate_coupon()
 --   wishlist_items    each customer reads and changes only their own rows
+--   contact_messages  admin only; visitors can only send through submit_contact()
 --   reviews           public sees approved ones only; visitors add reviews through
 --                     submit_review(); admin approves or deletes
 --   orders            visitors have NO direct access: they place orders through
@@ -49,6 +51,7 @@
 --   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...}, p_coupon })  -- p_coupon optional
 --   rpc('validate_coupon', { p_code, p_lines: [{ variantId, quantity }] })   -- checkout preview
 --   rpc('wishlist_merge', { p_ids: ['zj-ring-01', ...] })                    -- signed-in customers
+--   rpc('submit_contact', { p_name, p_phone, p_email, p_subject, p_message, p_hp })
 --   rpc('submit_review', { p_product_id, p_rating, p_author, p_title, p_body, p_hp })
 --   rpc('save_product',  { p_product: {...}, p_variants: [...] })      -- admin only
 -- place_order also still accepts the older { productId, color, size, quantity } lines.
@@ -330,6 +333,24 @@ create table if not exists public.wishlist_items (
   created_at timestamptz not null default now(),
   primary key (user_id, product_id)
 );
+
+-- Messages from the Contact Us form. Visitors have no access to this table: they send through
+-- submit_contact(); only the admin reads, marks handled and deletes.
+create table if not exists public.contact_messages (
+  id         uuid primary key default gen_random_uuid(),
+  full_name  text not null check (length(full_name) between 3 and 100),
+  phone      text not null check (length(phone) between 10 and 20),
+  email      text not null default '' check (length(email) <= 254),
+  subject    text not null check (length(subject) between 3 and 150),
+  message    text not null check (length(message) between 10 and 2000),
+  status     text not null default 'new' check (status in ('new', 'handled')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists contact_messages_status_idx
+  on public.contact_messages (status, created_at desc);
+create index if not exists contact_messages_created_idx
+  on public.contact_messages (created_at desc);
 
 
 -- ---------------------------------------------------------------------
@@ -1188,6 +1209,79 @@ $$;
 
 
 -- ---------------------------------------------------------------------
+-- 14b. Contact Us: save a message for the admin to read
+--      Visitors cannot read or write the table directly; this function is the only way in.
+-- ---------------------------------------------------------------------
+
+create or replace function public.submit_contact(
+  p_name    text,
+  p_phone   text,
+  p_email   text,
+  p_subject text,
+  p_message text,
+  p_hp      text default ''
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  phone_re  constant text := '^(03|[+]923|923|00923)[0-9]{9}$';
+  v_name    text := trim(coalesce(p_name, ''));
+  v_phone   text := regexp_replace(coalesce(p_phone, ''), '[[:space:]()-]', '', 'g');
+  v_email   text := trim(coalesce(p_email, ''));
+  v_subject text := trim(coalesce(p_subject, ''));
+  v_message text := trim(coalesce(p_message, ''));
+  v_key     text;
+begin
+  -- Honeypot: real people leave this field empty. Pretend it worked.
+  if coalesce(p_hp, '') <> '' then
+    return;
+  end if;
+
+  if length(v_name) not between 3 and 100 then
+    raise exception 'Please enter your name.';
+  end if;
+  if v_phone !~ phone_re then
+    raise exception 'Please enter a valid Pakistani phone number.';
+  end if;
+  if v_email <> '' and (length(v_email) > 254 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$') then
+    raise exception 'Please enter a valid email address or leave it blank.';
+  end if;
+  if length(v_subject) not between 3 and 150 then
+    raise exception 'Please enter a subject.';
+  end if;
+  if length(v_message) not between 10 and 2000 then
+    raise exception 'Your message must be between 10 and 2000 characters.';
+  end if;
+
+  -- Abuse guards. Not real rate limiting (a bot can vary phone numbers): put Cloudflare / a WAF in front for that.
+  v_key := right(regexp_replace(v_phone, '[^0-9]', '', 'g'), 10);
+  if (select count(*)
+        from public.contact_messages c
+       where c.created_at > now() - interval '1 hour'
+         and right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10) = v_key) >= 3 then
+    raise exception 'You have sent several messages already. Please wait a while or message us on WhatsApp.';
+  end if;
+  if exists (select 1
+               from public.contact_messages c
+              where c.created_at > now() - interval '1 day'
+                and right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10) = v_key
+                and lower(c.message) = lower(v_message)) then
+    raise exception 'You have already sent this message.';
+  end if;
+  if (select count(*) from public.contact_messages c where c.status = 'new') >= 500 then
+    raise exception 'Messages are temporarily paused. Please message us on WhatsApp instead.';
+  end if;
+
+  insert into public.contact_messages (full_name, phone, email, subject, message)
+  values (v_name, v_phone, v_email, v_subject, v_message);
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- 15. Save a product and its variants in one transaction (admin only)
 --     SECURITY INVOKER on purpose: Row Level Security still applies, and the
 --     is_admin() check below gives a clear error instead of a silent no-op.
@@ -1428,6 +1522,7 @@ alter table public.profiles         enable row level security;
 alter table public.orders           enable row level security;
 alter table public.coupons          enable row level security;
 alter table public.wishlist_items   enable row level security;
+alter table public.contact_messages enable row level security;
 alter table public.store_settings   enable row level security;
 
 -- products
@@ -1499,6 +1594,13 @@ create policy wishlist_owner on public.wishlist_items
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
 
+-- contact_messages: admin only (the messages contain phone numbers and emails)
+drop policy if exists contact_admin_all on public.contact_messages;
+create policy contact_admin_all on public.contact_messages
+  for all to authenticated
+  using ((select public.is_admin()))
+  with check ((select public.is_admin()));
+
 -- store_settings
 drop policy if exists settings_read on public.store_settings;
 create policy settings_read on public.store_settings
@@ -1516,7 +1618,7 @@ create policy settings_admin_write on public.store_settings
 -- ---------------------------------------------------------------------
 
 revoke all on public.products, public.product_variants, public.reviews, public.profiles,
-              public.orders, public.coupons, public.wishlist_items, public.store_settings
+              public.orders, public.coupons, public.wishlist_items, public.contact_messages, public.store_settings
   from anon, authenticated;
 
 grant select on public.products, public.product_variants, public.store_settings to anon, authenticated;
@@ -1533,11 +1635,13 @@ grant select, insert, update on public.profiles to authenticated;
 grant select, update, delete on public.orders to authenticated;
 grant select, insert, update, delete on public.coupons to authenticated;
 grant select, insert, delete on public.wishlist_items to authenticated;
+grant select, update, delete on public.contact_messages to authenticated;
 
 -- Functions. Supabase grants EXECUTE to anon/authenticated by default, so reset each one.
 revoke all on function public.place_order(jsonb, jsonb, text)                        from public, anon, authenticated;
 revoke all on function public.validate_coupon(text, jsonb)                           from public, anon, authenticated;
 revoke all on function public.wishlist_merge(text[])                                 from public, anon, authenticated;
+revoke all on function public.submit_contact(text, text, text, text, text, text)     from public, anon, authenticated;
 revoke all on function public.coupon_discount(text, jsonb, text, uuid, boolean)      from public, anon, authenticated;
 revoke all on function public.submit_review(text, integer, text, text, text, text)   from public, anon, authenticated;
 revoke all on function public.save_product(jsonb, jsonb)                             from public, anon, authenticated;
@@ -1553,6 +1657,7 @@ revoke all on function public.orders_restock()                                  
 grant execute on function public.place_order(jsonb, jsonb, text)                      to anon, authenticated;
 grant execute on function public.validate_coupon(text, jsonb)                         to anon, authenticated;
 grant execute on function public.wishlist_merge(text[])                               to authenticated;
+grant execute on function public.submit_contact(text, text, text, text, text, text)   to anon, authenticated;
 grant execute on function public.submit_review(text, integer, text, text, text, text) to anon, authenticated;
 grant execute on function public.save_product(jsonb, jsonb)                           to authenticated;
 grant execute on function public.jsonb_text_array(jsonb)                              to authenticated;
