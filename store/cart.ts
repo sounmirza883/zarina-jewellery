@@ -16,7 +16,13 @@ interface CartState {
 
   // Actions
   setShipping: (flatRate: number, freeShippingThreshold: number) => void;
-  addItem: (product: Product, variant: ProductVariant, quantity?: number) => void;
+  /** The bag drawer opens after adding unless `openDrawer: false` (Buy Now goes straight to checkout). */
+  addItem: (
+    product: Product,
+    variant: ProductVariant,
+    quantity?: number,
+    options?: { openDrawer?: boolean }
+  ) => void;
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
@@ -56,7 +62,7 @@ export const useCartStore = create<CartState>()(
       setShipping: (flatRate, freeShippingThreshold) =>
         set({ shipping: { flatRate, freeShippingThreshold } }),
 
-      addItem: (product, variant, quantity = 1) => {
+      addItem: (product, variant, quantity = 1, options = {}) => {
         if (variant.stockQty <= 0) {
           set({ toastMessage: `"${product.name}" is out of stock` });
           return;
@@ -85,7 +91,7 @@ export const useCartStore = create<CartState>()(
             items: existing
               ? state.items.map((item) => (item === existing ? newItem : item))
               : [...state.items, newItem],
-            isDrawerOpen: true,
+            isDrawerOpen: options.openDrawer ?? true,
             lastAddedItem: newItem,
             toastMessage:
               capped < wanted
