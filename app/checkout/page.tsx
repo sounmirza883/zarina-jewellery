@@ -337,7 +337,7 @@ export default function CheckoutPage() {
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1.5 flex items-center gap-1">
                     <Mail className="w-3.5 h-3.5 text-[#B8893B]" />
-                    <span>Email Address (Optional for order tracking receipt)</span>
+                    <span>Email Address (Optional, for your order confirmation)</span>
                   </label>
                   <input
                     type="email"
