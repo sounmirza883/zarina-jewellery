@@ -85,7 +85,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
 │   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
-│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist
+│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts, resend.ts, order-email.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist, order emails
 │   └── *.test.ts                    # Node built-in unit tests (node:test)
 ├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
@@ -141,7 +141,17 @@ Without the env vars the storefront falls back to the static products in `/data/
 
 **Wishlist**: customers tap the heart on a product card or product page to save a piece; the header heart shows the count and `/wishlist` lists the saved pieces. The list is kept in the browser (works without an account). When a customer signs in, their browser list is merged into their account (`wishlist_items` table, `wishlist_merge()` function in `supabase/schema.sql`) and loaded on their other devices; signing out clears a list that came from an account. Run the updated `supabase/schema.sql` for the account sync; the browser wishlist works without it.
 
-**Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
+**Order emails (Resend)**: when an order is placed, checkout sends it through the server action `app/actions/place-order.ts`, which saves it with `place_order` exactly as before and then emails (through [Resend](https://resend.com), `lib/resend.ts`) a confirmation to the customer (only if they typed an email at checkout) and a "new order" alert to the shop owner (`lib/order-email.ts`). The emails go out after the response, so checkout is not slowed down, and an email problem never cancels or hides an order; failures are only written to the server log. Set these **server** variables (none start with `NEXT_PUBLIC_`; see `.env.example`):
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | `re_...` | Resend API key (create it with "Sending access" only) |
+| `ORDER_EMAIL_FROM` | `Zarina Jewels <orders@zarinajewels.pk>` | Sender, must be on a domain verified in Resend |
+| `ORDER_NOTIFY_EMAIL` | `owner@gmail.com` | Gets the new-order alert and any customer reply; separate several addresses with commas |
+
+Setup: in Resend add your domain (a subdomain such as `updates.zarinajewels.pk` is recommended) and add the DNS records it shows (usually verified within minutes, up to 72 hours); create the API key; add the three variables in Vercel (**Settings -> Environment Variables**) and **redeploy**, because variables only reach new deployments; then place one test order with your own email. Without the variables the shop works as before and just logs that emails are switched off. Resend can only send to other people from a verified domain; its shared test sender `onboarding@resend.dev` delivers only to your own Resend account email. Limits: the Resend free plan allows 100 emails a day and 3,000 a month (an order with an email uses 2); there is no retry, so an email is lost if Resend is down at that moment; a guest can type someone else's address and that person gets one confirmation (the email says how to report it); emails are English only and only sent when an order is placed, not when its status changes.
+
+**Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no SMS or WhatsApp notifications, and emails are sent only when an order is placed.
 
 ---
 
@@ -150,7 +160,7 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, JSON-LD and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, order emails (content, HTML escaping, recipients) and the Resend request, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash
