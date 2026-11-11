@@ -131,7 +131,7 @@ Products (with variants and stock), reviews, coupons, wishlists, customer accoun
 5. **Authentication -> URL Configuration**: set the Site URL to your website and add `<your site>/auth/callback` to the Redirect URLs (used by email confirmation and password reset).
 6. Before real customers sign up, connect your own email provider under **Authentication -> Emails -> SMTP**; Supabase's built-in sender allows only a few emails per hour.
 7. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
-8. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js`, `@supabase/ssr`, `jspdf` and `html2canvas-pro` packages.
+8. Install with `npm ci` (see [Getting started](#-getting-started-fresh-clone-and-teamwork)); `package-lock.json` is the only lockfile.
 
 Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout, accounts, reviews and the admin dashboard need Supabase.
 
@@ -152,6 +152,46 @@ Without the env vars the storefront falls back to the static products in `/data/
 Setup: in Resend add your domain (a subdomain such as `updates.zarinajewels.pk` is recommended) and add the DNS records it shows (usually verified within minutes, up to 72 hours); create the API key; add the three variables in Vercel (**Settings -> Environment Variables**) and **redeploy**, because variables only reach new deployments; then place one test order with your own email. Without the variables the shop works as before and just logs that emails are switched off. Resend can only send to other people from a verified domain; its shared test sender `onboarding@resend.dev` delivers only to your own Resend account email. Limits: the Resend free plan allows 100 emails a day and 3,000 a month (an order with an email uses 2); there is no retry, so an email is lost if Resend is down at that moment; a guest can type someone else's address and that person gets one confirmation (the email says how to report it); emails are English only and only sent when an order is placed, not when its status changes.
 
 **Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no SMS or WhatsApp notifications, and emails are sent only when an order is placed.
+
+---
+
+## 🚀 Getting started, fresh clone and teamwork
+Needs **Node 20 or newer** and **Git**. Use **npm** only: `package-lock.json` is the one lockfile, and `bun install` / `yarn` create extra lockfiles that dirty the working tree. Keep the project **outside OneDrive** (for example `C:\dev`): OneDrive locks files and half-syncs `.git`, which causes random Git errors.
+
+**First time, or when the owner says "delete it and clone again"**: paste this block into PowerShell from any folder. It refuses to delete a copy that has uncommitted, stashed or unpushed work, keeps your `.env`, clones again, installs and starts the site on <http://localhost:3000>.
+
+```powershell
+& {
+  $dir = "C:\dev\zarina-jewellery"   # where the project lives (outside OneDrive)
+  $url = "https://github.com/sounmirza883/zarina-jewellery.git"
+  $bak = "$env:TEMP\zarina.env"
+  Remove-Item $bak -ErrorAction SilentlyContinue
+  if (Test-Path "$dir\.git") {
+    if (git -C $dir status --porcelain)                      { throw "Uncommitted changes in $dir. Commit or stash them first." }
+    if (git -C $dir stash list)                              { throw "Stashed work in $dir. Apply or drop it first." }
+    if (git -C $dir log --branches --not --remotes --oneline) { throw "Unpushed commits in $dir. Run git push first." }
+    if (Test-Path "$dir\.env") { Copy-Item "$dir\.env" $bak }
+  }
+  Set-Location $env:USERPROFILE   # step out of the folder so it can be deleted
+  if (Test-Path $dir) { cmd /c rmdir /s /q "$dir" }
+  git clone $url $dir;                    if ($LASTEXITCODE) { throw "git clone failed" }
+  Set-Location $dir
+  if (Test-Path $bak) { Move-Item $bak .env } else { Copy-Item .env.example .env }
+  npm ci;                                 if ($LASTEXITCODE) { throw "npm ci failed" }
+  npm run dev
+}
+```
+
+**`.env`**: ask the owner for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` and paste them into `.env` to see the real products and orders. Without them the site still runs on the static demo products in `/data/products.ts`. You do not need `RESEND_API_KEY`; never commit `.env`.
+
+**Daily flow**:
+```bash
+git pull                              # always first
+git checkout -b feat/short-name       # one branch per piece of work
+git add -A && git commit -m "feat: what changed"
+git push -u origin HEAD               # first push of a branch; afterwards just: git push
+```
+Every commit and branch pushed to GitHub shows up for the owner after a `git fetch`; nothing else to set up. If `git pull` says "Please clean your repository working tree before checkout", run `git status`, commit or `git stash` your changes, then pull again.
 
 ---
 
