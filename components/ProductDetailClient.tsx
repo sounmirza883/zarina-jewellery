@@ -100,7 +100,8 @@ export default function ProductDetailClient({
 
   const handleBuyNow = () => {
     if (!canBuy) return;
-    addItem(product, variant, qty);
+    // No bag drawer: the shopper wants checkout, not a slide-out over it.
+    addItem(product, variant, qty, { openDrawer: false });
     router.push('/checkout');
   };
 
