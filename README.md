@@ -75,7 +75,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 ├── config/
 │   └── site.ts                      # Central brand configuration, contact, shipping rates
 ├── constants/
-│   └── verse.ts                     # Surah Al-A'raf 7:31 live Arabic & Urdu text
+│   └── verse.ts                     # Surah As-Sajdah 32:7 live Arabic & Urdu text
 ├── data/
 │   └── products.ts                  # Mock products with materials & category definitions
 ├── lib/
@@ -85,7 +85,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
 │   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
-│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist
+│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts, resend.ts, order-email.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist, order emails
 │   └── *.test.ts                    # Node built-in unit tests (node:test)
 ├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
@@ -131,7 +131,7 @@ Products (with variants and stock), reviews, coupons, wishlists, contact message
 5. **Authentication -> URL Configuration**: set the Site URL to your website and add `<your site>/auth/callback` to the Redirect URLs (used by email confirmation and password reset).
 6. Before real customers sign up, connect your own email provider under **Authentication -> Emails -> SMTP**; Supabase's built-in sender allows only a few emails per hour.
 7. Copy the Project URL and the anon / publishable key (never `service_role`) from **Project Settings -> API** into `.env` (see `.env.example`), then restart the dev server.
-8. Run `bun install` (or `npm install`): `bun.lock` was not regenerated for the new `@supabase/supabase-js`, `@supabase/ssr`, `jspdf` and `html2canvas-pro` packages.
+8. Install with `npm ci` (see [Getting started](#-getting-started-fresh-clone-and-teamwork)); `package-lock.json` is the only lockfile.
 
 Without the env vars the storefront falls back to the static products in `/data/products.ts`. Checkout, accounts, reviews and the admin dashboard need Supabase.
 
@@ -141,9 +141,59 @@ Without the env vars the storefront falls back to the static products in `/data/
 
 **Wishlist**: customers tap the heart on a product card or product page to save a piece; the header heart shows the count and `/wishlist` lists the saved pieces. The list is kept in the browser (works without an account). When a customer signs in, their browser list is merged into their account (`wishlist_items` table, `wishlist_merge()` function in `supabase/schema.sql`) and loaded on their other devices; signing out clears a list that came from an account. Run the updated `supabase/schema.sql` for the account sync; the browser wishlist works without it.
 
+**Order emails (Resend)**: when an order is placed, checkout sends it through the server action `app/actions/place-order.ts`, which saves it with `place_order` exactly as before and then emails (through [Resend](https://resend.com), `lib/resend.ts`) a confirmation to the customer (only if they typed an email at checkout) and a "new order" alert to the shop owner (`lib/order-email.ts`). The emails go out after the response, so checkout is not slowed down, and an email problem never cancels or hides an order; failures are only written to the server log. Set these **server** variables (none start with `NEXT_PUBLIC_`; see `.env.example`):
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `RESEND_API_KEY` | `re_...` | Resend API key (create it with "Sending access" only) |
+| `ORDER_EMAIL_FROM` | `Zarina Jewels <orders@zarinajewels.pk>` | Sender, must be on a domain verified in Resend |
+| `ORDER_NOTIFY_EMAIL` | `owner@gmail.com` | Gets the new-order alert and any customer reply; separate several addresses with commas |
+
+Setup: in Resend add your domain (a subdomain such as `updates.zarinajewels.pk` is recommended) and add the DNS records it shows (usually verified within minutes, up to 72 hours); create the API key; add the three variables in Vercel (**Settings -> Environment Variables**) and **redeploy**, because variables only reach new deployments; then place one test order with your own email. Without the variables the shop works as before and just logs that emails are switched off. Resend can only send to other people from a verified domain; its shared test sender `onboarding@resend.dev` delivers only to your own Resend account email. Limits: the Resend free plan allows 100 emails a day and 3,000 a month (an order with an email uses 2); there is no retry, so an email is lost if Resend is down at that moment; a guest can type someone else's address and that person gets one confirmation (the email says how to report it); emails are English only and only sent when an order is placed, not when its status changes.
+
 **Contact messages**: the Contact Us form saves each message in the `contact_messages` table through `submit_contact()` in `supabase/schema.sql` (spam guards: a hidden honeypot field, a limit of 3 messages per phone number per hour, no repeat of the same text). In the admin **Messages** tab the team sees new messages (with a count in the sidebar), taps **WhatsApp** to open a chat with the sender's number (greeting ready to send) or **Call**, and marks the message handled. Run the updated `supabase/schema.sql` before deploying; until then the form shows a "could not send" message with a WhatsApp link instead of a fake thank-you. There is no email or push alert when a message arrives.
 
-**Known limits**: coupon checks, contact messages and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no automatic SMS, WhatsApp or email notifications.
+**Known limits**: coupon checks, contact messages and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no SMS or WhatsApp notifications, and emails are sent only when an order is placed.
+
+---
+
+## 🚀 Getting started, fresh clone and teamwork
+Needs **Node 20 or newer** and **Git**. Use **npm** only: `package-lock.json` is the one lockfile, and `bun install` / `yarn` create extra lockfiles that dirty the working tree. Keep the project **outside OneDrive** (for example `C:\dev`): OneDrive locks files and half-syncs `.git`, which causes random Git errors.
+
+**First time, or when the owner says "delete it and clone again"**: paste this block into PowerShell from any folder. It refuses to delete a copy that has uncommitted, stashed or unpushed work, keeps your `.env`, clones again, installs and starts the site on <http://localhost:3000>.
+
+```powershell
+& {
+  $dir = "C:\dev\zarina-jewellery"   # where the project lives (outside OneDrive)
+  $url = "https://github.com/sounmirza883/zarina-jewellery.git"
+  $bak = "$env:TEMP\zarina.env"
+  Remove-Item $bak -ErrorAction SilentlyContinue
+  if (Test-Path "$dir\.git") {
+    if (git -C $dir status --porcelain)                      { throw "Uncommitted changes in $dir. Commit or stash them first." }
+    if (git -C $dir stash list)                              { throw "Stashed work in $dir. Apply or drop it first." }
+    if (git -C $dir log --branches --not --remotes --oneline) { throw "Unpushed commits in $dir. Run git push first." }
+    if (Test-Path "$dir\.env") { Copy-Item "$dir\.env" $bak }
+  }
+  Set-Location $env:USERPROFILE   # step out of the folder so it can be deleted
+  if (Test-Path $dir) { cmd /c rmdir /s /q "$dir" }
+  git clone $url $dir;                    if ($LASTEXITCODE) { throw "git clone failed" }
+  Set-Location $dir
+  if (Test-Path $bak) { Move-Item $bak .env } else { Copy-Item .env.example .env }
+  npm ci;                                 if ($LASTEXITCODE) { throw "npm ci failed" }
+  npm run dev
+}
+```
+
+**`.env`**: ask the owner for `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` and paste them into `.env` to see the real products and orders. Without them the site still runs on the static demo products in `/data/products.ts`. You do not need `RESEND_API_KEY`; never commit `.env`.
+
+**Daily flow**:
+```bash
+git pull                              # always first
+git checkout -b feat/short-name       # one branch per piece of work
+git add -A && git commit -m "feat: what changed"
+git push -u origin HEAD               # first push of a branch; afterwards just: git push
+```
+Every commit and branch pushed to GitHub shows up for the owner after a `git fetch`; nothing else to set up. If `git pull` says "Please clean your repository working tree before checkout", run `git status`, commit or `git stash` your changes, then pull again.
 
 ---
 
@@ -152,7 +202,7 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, WhatsApp links, JSON-LD and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, WhatsApp links, order emails (content, HTML escaping, recipients) and the Resend request, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash

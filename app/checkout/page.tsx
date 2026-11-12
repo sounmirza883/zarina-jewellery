@@ -24,10 +24,10 @@ import { useCartStore } from '@/store/cart';
 import { formatPKR, isValidPakistaniPhone, cartItemLabel } from '@/lib/shop-logic';
 import { lineUnitPrice } from '@/lib/pricing';
 import { validateCoupon } from '@/lib/coupons';
-import { createClient } from '@/lib/supabase/client';
+import { placeOrder } from '@/app/actions/place-order';
 import { supabaseConfigured } from '@/lib/supabase/config';
 import { siteConfig } from '@/config/site';
-import { CouponPreview, Order } from '@/types/product';
+import { CouponPreview } from '@/types/product';
 import ProductImage from '@/components/ProductImage';
 
 // Form validation schema using Zod
@@ -172,11 +172,12 @@ export default function CheckoutPage() {
     setIsSubmitting(true);
 
     try {
-      // The server re-prices the bag, adds shipping and assigns the order number (place_order in supabase/schema.sql).
-      const { data: placed, error } = await createClient().rpc('place_order', {
-        p_lines: items.map((i) => ({ variantId: i.variantId ?? i.cartItemId, quantity: i.quantity })),
-        p_coupon: applied?.preview.code ?? null,
-        p_customer: {
+      // The server re-prices the bag, adds shipping and assigns the order number (place_order in supabase/schema.sql),
+      // then emails the customer and the shop owner (app/actions/place-order.ts).
+      const result = await placeOrder({
+        lines: items.map((i) => ({ variantId: i.variantId ?? i.cartItemId, quantity: i.quantity })),
+        coupon: applied?.preview.code ?? null,
+        customer: {
           fullName: data.fullName,
           phone: data.phone,
           whatsapp: data.whatsapp,
@@ -188,18 +189,13 @@ export default function CheckoutPage() {
         },
       });
 
-      if (error || !placed) {
-        // P0001 is a validation message written for customers inside place_order; anything else is a server fault.
-        setSubmitError(
-          error?.code === 'P0001'
-            ? error.message
-            : 'We could not place your order. Please try again or order through WhatsApp.'
-        );
+      if ('error' in result) {
+        setSubmitError(result.error);
         setIsSubmitting(false);
         return;
       }
 
-      const order = placed as Order;
+      const { order } = result;
       // Visitors cannot read orders back from the database, so the success page reads this local copy.
       // The order is already saved, so a storage failure (private mode, quota) must not block the redirect.
       try {
@@ -341,7 +337,7 @@ export default function CheckoutPage() {
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1.5 flex items-center gap-1">
                     <Mail className="w-3.5 h-3.5 text-[#B8893B]" />
-                    <span>Email Address (Optional for order tracking receipt)</span>
+                    <span>Email Address (Optional, for your order confirmation)</span>
                   </label>
                   <input
                     type="email"
