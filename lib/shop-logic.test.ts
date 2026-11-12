@@ -4,6 +4,7 @@ import {
   formatPKR,
   calculateCartTotals,
   isValidPakistaniPhone,
+  isPlainEmail,
   normalizePakistaniPhone,
   maxQuantity,
   cartItemLabel,
@@ -92,6 +93,16 @@ test('isValidPakistaniPhone validates standard Pakistani phone numbers correctly
   assert.equal(isValidPakistaniPhone('02131234567'), false); // Landline not mobile
   assert.equal(isValidPakistaniPhone('030012345'), false); // Too short
   assert.equal(isValidPakistaniPhone('abcdefghijk'), false);
+});
+
+test('isPlainEmail accepts ordinary addresses and refuses the ones email providers reject', () => {
+  for (const ok of ['fatima@example.com', ' fatima.ali+shop@mail.example.pk ', 'a_b-c%d@sub.domain.co.uk']) {
+    assert.equal(isPlainEmail(ok), true, ok);
+  }
+  const tooLong = `${'a'.repeat(250)}@example.com`;
+  for (const bad of ['', 'fatima', 'fatima@example', 'fatima@@example.com', 'a b@example.com', 'a"b@example.com', '<a@example.com>', 'a@example.com, b@example.com', 'a@example..com', tooLong]) {
+    assert.equal(isPlainEmail(bad), false, bad);
+  }
 });
 
 test('normalizePakistaniPhone normalizes phone numbers to 03XXXXXXXXX format', () => {

@@ -87,6 +87,16 @@ export function isValidPakistaniPhone(phone: string): boolean {
   );
 }
 
+// The same pattern is used by submit_contact in supabase/schema.sql: keep them in step. It accepts
+// only plain addresses (no quotes, commas or angle brackets), which email providers always take.
+const PLAIN_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
+/** True for a plain email address like name@example.com (surrounding spaces are ignored). */
+export function isPlainEmail(email: string): boolean {
+  const address = email.trim();
+  return address.length <= 254 && PLAIN_EMAIL.test(address);
+}
+
 /**
  * Normalizes phone number into standard local Pakistani format (03001234567)
  */

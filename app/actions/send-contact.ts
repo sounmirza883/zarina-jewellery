@@ -4,7 +4,7 @@ import { after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseConfigured } from '@/lib/supabase/config';
 import { rowToContactMessage, type ContactMessageRow } from '@/lib/supabase/mappers';
-import { sendContactAlert } from '@/lib/contact-email';
+import { sendContactEmails } from '@/lib/contact-email';
 
 export interface ContactInput {
   fullName: string;
@@ -21,9 +21,10 @@ const CONTACT_FAILED = 'We could not send your message. Please try again or mess
 
 /**
  * Saves a Contact Us message with submit_contact (checks, spam guards and limits all stay in the
- * database), then emails the shop owner. It runs on the server so the Resend key stays secret and the
- * email is built from the row the database saved. The email goes out after the response, so an email
- * problem can never lose the message: it is already in the admin Messages tab.
+ * database), then emails the visitor a confirmation and the support team an alert. It runs on the server
+ * so the Resend key stays secret and the emails are built from the row the database saved. They go out
+ * after the response, so an email problem can never lose the message: it is already in the admin
+ * Messages tab.
  * `honeypot` is the hidden field real visitors leave empty.
  */
 export async function sendContactMessage(input: ContactInput, honeypot = ''): Promise<SendContactResult> {
@@ -50,7 +51,7 @@ export async function sendContactMessage(input: ContactInput, honeypot = ''): Pr
     // null means the honeypot was filled: nothing was saved, and the bot is told it worked.
     if (data) {
       const message = rowToContactMessage(data as ContactMessageRow);
-      after(() => sendContactAlert(message));
+      after(() => sendContactEmails(message));
     }
     return { ok: true };
   } catch {
