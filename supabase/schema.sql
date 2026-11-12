@@ -1211,8 +1211,9 @@ $$;
 -- ---------------------------------------------------------------------
 -- 14b. Contact Us: save a message for the admin to read
 --      Visitors cannot read or write the table directly; this function is the only way in.
---      Returns the saved row as jsonb (snake_case columns) so the app can email the owner,
---      or null when the honeypot is filled.
+--      Returns the saved row as jsonb (snake_case columns) so the app can email the visitor a
+--      confirmation and the support team an alert, or null when the honeypot is filled.
+--      The phone and the email are both required (older rows may have an empty email).
 -- ---------------------------------------------------------------------
 
 -- The earlier version returned void; create or replace cannot change a return type, so drop it first.
@@ -1252,8 +1253,13 @@ begin
   if v_phone !~ phone_re then
     raise exception 'Please enter a valid Pakistani phone number.';
   end if;
-  if v_email <> '' and (length(v_email) > 254 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$') then
-    raise exception 'Please enter a valid email address or leave it blank.';
+  -- The email is required: the shop sends a confirmation to it. Plain addresses only (same pattern as
+  -- isPlainEmail in lib/shop-logic.ts), because anything else an email provider would refuse.
+  if v_email = '' then
+    raise exception 'Please enter your email address.';
+  end if;
+  if length(v_email) > 254 or v_email !~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)*[.][A-Za-z]{2,}$' then
+    raise exception 'Please enter a valid email address.';
   end if;
   if length(v_subject) not between 3 and 150 then
     raise exception 'Please enter a subject.';
@@ -1268,6 +1274,14 @@ begin
         from public.contact_messages c
        where c.created_at > now() - interval '1 hour'
          and right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10) = v_key) >= 3 then
+    raise exception 'You have sent several messages already. Please wait a while or message us on WhatsApp.';
+  end if;
+  -- Every message sends a confirmation to this address, so also cap it per email (the form cannot be
+  -- used to flood someone's inbox by changing the phone number each time).
+  if (select count(*)
+        from public.contact_messages c
+       where c.created_at > now() - interval '1 hour'
+         and lower(c.email) = lower(v_email)) >= 3 then
     raise exception 'You have sent several messages already. Please wait a while or message us on WhatsApp.';
   end if;
   if exists (select 1

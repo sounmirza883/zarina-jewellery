@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react';
-import { isValidPakistaniPhone } from '@/lib/shop-logic';
+import { isPlainEmail, isValidPakistaniPhone } from '@/lib/shop-logic';
 import { sendContactMessage } from '@/app/actions/send-contact';
 import { siteConfig } from '@/config/site';
 
@@ -22,7 +22,12 @@ const contactSchema = z.object({
     .refine((val) => isValidPakistaniPhone(val), {
       message: 'Enter a valid Pakistani phone number',
     }),
-  email: z.string().email({ message: 'Enter a valid email' }).or(z.literal('')),
+  // Required: we email a confirmation to this address.
+  email: z
+    .string()
+    .trim()
+    .min(1, { message: 'Please enter your email' })
+    .refine((val) => isPlainEmail(val), { message: 'Enter a valid email' }),
   subject: z
     .string()
     .trim()
@@ -82,7 +87,7 @@ export default function ContactFormClient() {
         Send Us a Message
       </h3>
       <p className="text-xs text-[#575757] mb-6">
-        Have a question about a product, customization, or an existing order? Send us a message and our team will get back to you promptly.
+        Have a question about a product, customization, or an existing order? Send us a message and our team will get back to you promptly. We will email you a confirmation as soon as it arrives.
       </p>
 
       {submitted ? (
@@ -92,7 +97,7 @@ export default function ContactFormClient() {
             Thank you for reaching out!
           </h4>
           <p className="text-xs text-emerald-700 leading-relaxed max-w-sm mx-auto">
-            Your inquiry has been received. A Zarina Jewels customer representative will respond to your phone or WhatsApp shortly.
+            Your inquiry has been received and we have emailed you a confirmation. Our support team will contact you very soon on your phone, WhatsApp or email.
           </p>
           <button
             type="button"
@@ -103,7 +108,7 @@ export default function ContactFormClient() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
             <input
               type="text"
@@ -122,6 +127,7 @@ export default function ContactFormClient() {
             <input
               id="contact-name"
               type="text"
+              autoComplete="name"
               {...register('fullName')}
               placeholder="e.g. Fatima Ali"
               className={`w-full px-3.5 py-2 text-xs sm:text-sm bg-[#FAF7F2] border rounded-md text-[#1F1F1F] focus:outline-hidden ${
@@ -144,6 +150,7 @@ export default function ContactFormClient() {
               <input
                 id="contact-phone"
                 type="tel"
+                autoComplete="tel"
                 {...register('phone')}
                 placeholder="0300 1234567"
                 className={`w-full px-3.5 py-2 text-xs sm:text-sm bg-[#FAF7F2] border rounded-md text-[#1F1F1F] focus:outline-hidden ${
@@ -160,11 +167,12 @@ export default function ContactFormClient() {
 
             <div>
               <label htmlFor="contact-email" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
-                Email Address (Optional)
+                Email Address <span className="text-[#991B1B]">*</span>
               </label>
               <input
                 id="contact-email"
                 type="email"
+                autoComplete="email"
                 {...register('email')}
                 placeholder="fatima@example.com"
                 className={`w-full px-3.5 py-2 text-xs sm:text-sm bg-[#FAF7F2] border rounded-md text-[#1F1F1F] focus:outline-hidden ${

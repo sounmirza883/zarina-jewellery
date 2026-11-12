@@ -46,13 +46,30 @@ export function shell(title: string, inner: string): string {
 </table></td></tr></table></body></html>`;
 }
 
-/** The sender address from the server's environment ('' when emails are not set up). */
-export const emailFrom = (): string => process.env.ORDER_EMAIL_FROM ?? '';
-
-/** The shop owner's addresses from ORDER_NOTIFY_EMAIL (comma separated). */
-export function notifyRecipients(): string[] {
-  return (process.env.ORDER_NOTIFY_EMAIL ?? '')
+/** Splits a comma separated list of addresses ("a@x.com, b@x.com") and drops blanks. */
+const addressList = (value: string | undefined): string[] =>
+  (value ?? '')
     .split(',')
     .map((address) => address.trim())
     .filter(Boolean);
+
+/** The order-email sender from the server's environment ('' when emails are not set up). */
+export const emailFrom = (): string => process.env.ORDER_EMAIL_FROM ?? '';
+
+/** The shop owner's addresses from ORDER_NOTIFY_EMAIL (comma separated). */
+export const notifyRecipients = (): string[] => addressList(process.env.ORDER_NOTIFY_EMAIL);
+
+/**
+ * The sender of the Contact Us emails (SUPPORT_EMAIL_FROM). Falls back to ORDER_EMAIL_FROM so the
+ * shop works with only the order variables set.
+ */
+export const supportEmailFrom = (): string => process.env.SUPPORT_EMAIL_FROM?.trim() || emailFrom();
+
+/**
+ * The support team and admin inboxes that get the "new contact message" alert (SUPPORT_NOTIFY_EMAIL,
+ * comma separated). Falls back to ORDER_NOTIFY_EMAIL when it is empty.
+ */
+export function supportRecipients(): string[] {
+  const support = addressList(process.env.SUPPORT_NOTIFY_EMAIL);
+  return support.length > 0 ? support : notifyRecipients();
 }
