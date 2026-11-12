@@ -50,6 +50,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── policies/                    # Returns, Delivery, Privacy, Terms
 │   ├── product/[slug]/page.tsx      # Product detail page with gallery & JSON-LD schema
 │   ├── actions/revalidate.ts        # Admin-only server action: refreshes static pages after edits
+│   ├── actions/send-contact.ts      # Server action: saves a Contact Us message and emails the owner
 │   ├── robots.ts                    # Search crawler rules
 │   ├── sitemap.ts                   # Dynamic XML sitemap
 │   └── shop/page.tsx                # Shop all catalogue with search, sort, and price filters
@@ -60,7 +61,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── BrandStoryBlock.tsx          # Home page brand narrative
 │   ├── CartDrawer.tsx               # Slide-out shopping bag drawer
 │   ├── CategoryTiles.tsx            # 4 category cards
-│   ├── ContactFormClient.tsx        # Validated contact form
+│   ├── ContactFormClient.tsx        # Contact form: saves each message to the database
 │   ├── FloatingWhatsApp.tsx         # Persistent WhatsApp button
 │   ├── Footer.tsx                   # Luxury navy footer
 │   ├── Header.tsx                   # Top announcement, logo, search, and navigation
@@ -85,7 +86,7 @@ Image files should be placed inside `/public/images/products`, `/public/images/h
 │   ├── supabase/                    # Supabase clients (browser, server, public), env check, row mappers
 │   ├── pricing.ts                   # Selling/regular/sale price, variants, stock helpers (pure)
 │   ├── shop-logic.ts                # Cart maths, shipping calculations, PK phone validation
-│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts, resend.ts, order-email.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist, order emails
+│   ├── account.ts, order-pdf.ts, seo.ts, reviews-api.ts, coupons.ts, coupon-form.ts, wishlist.ts, wishlist-api.ts, resend.ts, email-shared.ts, order-email.ts, contact-email.ts, whatsapp.ts   # Accounts, PDFs, JSON-LD, reviews, coupons, wishlist, order and contact emails, WhatsApp links
 │   └── *.test.ts                    # Node built-in unit tests (node:test)
 ├── middleware.ts                    # Refreshes the Supabase session on /admin and guards /account
 ├── supabase/
@@ -123,7 +124,7 @@ Stock goes down automatically when an order is placed and comes back if the orde
 ---
 
 ## 🔌 Supabase setup
-Products (with variants and stock), reviews, coupons, wishlists, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
+Products (with variants and stock), reviews, coupons, wishlists, contact messages, customer accounts, orders, store settings and admin login all live in Supabase. Storefront pages read through `/lib/api.ts`. **Everything in the database comes from one file: `supabase/schema.sql`.**
 1. Create a project at [supabase.com](https://supabase.com).
 2. **Run the SQL first, before deploying this code.** Open **SQL Editor**, paste `supabase/schema.sql` and run it. It is safe to run again and never deletes existing data.
 3. Create your admin user in **Authentication -> Users**, then run the `update auth.users ... '{"role":"admin"}'` statement from the header of `supabase/schema.sql`.
@@ -147,11 +148,13 @@ Without the env vars the storefront falls back to the static products in `/data/
 |---|---|---|
 | `RESEND_API_KEY` | `re_...` | Resend API key (create it with "Sending access" only) |
 | `ORDER_EMAIL_FROM` | `Zarina Jewels <orders@zarinajewels.pk>` | Sender, must be on a domain verified in Resend |
-| `ORDER_NOTIFY_EMAIL` | `owner@gmail.com` | Gets the new-order alert and any customer reply; separate several addresses with commas |
+| `ORDER_NOTIFY_EMAIL` | `owner@gmail.com` | Gets new-order and contact-message alerts and any customer reply; separate several addresses with commas |
 
-Setup: in Resend add your domain (a subdomain such as `updates.zarinajewels.pk` is recommended) and add the DNS records it shows (usually verified within minutes, up to 72 hours); create the API key; add the three variables in Vercel (**Settings -> Environment Variables**) and **redeploy**, because variables only reach new deployments; then place one test order with your own email. Without the variables the shop works as before and just logs that emails are switched off. Resend can only send to other people from a verified domain; its shared test sender `onboarding@resend.dev` delivers only to your own Resend account email. Limits: the Resend free plan allows 100 emails a day and 3,000 a month (an order with an email uses 2); there is no retry, so an email is lost if Resend is down at that moment; a guest can type someone else's address and that person gets one confirmation (the email says how to report it); emails are English only and only sent when an order is placed, not when its status changes.
+Setup: in Resend add your domain (a subdomain such as `updates.zarinajewels.pk` is recommended) and add the DNS records it shows (usually verified within minutes, up to 72 hours); create the API key; add the three variables in Vercel (**Settings -> Environment Variables**) and **redeploy**, because variables only reach new deployments; then place one test order with your own email. Without the variables the shop works as before and just logs that emails are switched off. Resend can only send to other people from a verified domain; its shared test sender `onboarding@resend.dev` delivers only to your own Resend account email. Limits: the Resend free plan allows 100 emails a day and 3,000 a month (an order with an email uses 2, each contact message uses 1); there is no retry, so an email is lost if Resend is down at that moment; a guest can type someone else's address and that person gets one confirmation (the email says how to report it); emails are English only and only sent when an order is placed or a contact message arrives, not when an order's status changes.
 
-**Known limits**: coupon checks and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no SMS or WhatsApp notifications, and emails are sent only when an order is placed.
+**Contact messages**: the Contact Us form saves each message in the `contact_messages` table through `submit_contact()` in `supabase/schema.sql` (spam guards: a hidden honeypot field, a limit of 3 messages per phone number per hour, no repeat of the same text). In the admin **Messages** tab the team sees new messages (with a count in the sidebar), taps **WhatsApp** to open a chat with the sender's number (greeting ready to send) or **Call**, and marks the message handled. Run the updated `supabase/schema.sql` before deploying; until then the form shows a "could not send" message with a WhatsApp link instead of a fake thank-you. The form sends through the server action `app/actions/send-contact.ts`; once the message is saved, the shop owner gets an email alert (`lib/contact-email.ts`) at `ORDER_NOTIFY_EMAIL`, using the same Resend variables as the order emails. The alert shows the message with a **WhatsApp** link (greeting ready to send), a **Call** link and an **Open admin** button, and pressing Reply answers the sender when they typed an email. The email goes out after the response, so a Resend problem never loses a message: it is still saved and shown in the **Messages** tab. A message caught by the honeypot gets a thank-you but is neither saved nor emailed.
+
+**Known limits**: coupon checks, contact messages and review submissions have no per-IP rate limiting (put Cloudflare or a similar service in front for production); there are no SMS or WhatsApp notifications, and emails are sent only when an order is placed or a contact message arrives.
 
 ---
 
@@ -200,7 +203,7 @@ Unit tests are written with Node's native test runner (`node:test`) and verify:
 - PKR currency formatting (`formatPKR`)
 - Flat rate and free shipping threshold calculations
 - Strict Pakistani mobile phone number validation (`03001234567`, `0300-1234567`, `+923001234567`)
-- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, order emails (content, HTML escaping, recipients) and the Resend request, JSON-LD and redirect safety
+- Price, variant and stock helpers, row mappers, product-form validation, review validation, coupon rules and totals, wishlist rules and store, WhatsApp links, order emails (content, HTML escaping, recipients) and the Resend request, JSON-LD and redirect safety
 
 Run the tests using:
 ```bash

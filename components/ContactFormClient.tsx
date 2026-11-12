@@ -6,9 +6,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import { isValidPakistaniPhone } from '@/lib/shop-logic';
+import { sendContactMessage } from '@/app/actions/send-contact';
+import { siteConfig } from '@/config/site';
 
 const contactSchema = z.object({
-  fullName: z.string().min(3, { message: 'Please enter your name' }),
+  // Lengths match the checks in submit_contact (supabase/schema.sql).
+  fullName: z
+    .string()
+    .trim()
+    .min(3, { message: 'Please enter your name' })
+    .max(100, { message: 'Name must be 100 characters or fewer' }),
   phone: z
     .string()
     .min(10, { message: 'Phone number is required' })
@@ -16,14 +23,25 @@ const contactSchema = z.object({
       message: 'Enter a valid Pakistani phone number',
     }),
   email: z.string().email({ message: 'Enter a valid email' }).or(z.literal('')),
-  subject: z.string().min(3, { message: 'Please enter a subject' }),
-  message: z.string().min(10, { message: 'Message must be at least 10 characters' }),
+  subject: z
+    .string()
+    .trim()
+    .min(3, { message: 'Please enter a subject' })
+    .max(150, { message: 'Subject must be 150 characters or fewer' }),
+  message: z
+    .string()
+    .trim()
+    .min(10, { message: 'Message must be at least 10 characters' })
+    .max(2000, { message: 'Message must be 2000 characters or fewer' }),
 });
 
 type ContactFormValues = z.infer<typeof contactSchema>;
 
 export default function ContactFormClient() {
   const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState('');
+  // Hidden field: real visitors never see it, bots tend to fill it in.
+  const [honeypot, setHoneypot] = useState('');
 
   const {
     register,
@@ -41,9 +59,19 @@ export default function ContactFormClient() {
     },
   });
 
-  const onSubmit = async () => {
-    // Frontend-only simulation
-    await new Promise((resolve) => setTimeout(resolve, 800));
+  const onSubmit = async (values: ContactFormValues) => {
+    setServerError('');
+    try {
+      const result = await sendContactMessage(values, honeypot);
+      if ('error' in result) {
+        setServerError(result.error);
+        return;
+      }
+    } catch {
+      // The request itself failed (offline, server unreachable): nothing was saved.
+      setServerError('We could not send your message. Please check your connection and try again, or message us on WhatsApp.');
+      return;
+    }
     setSubmitted(true);
     reset();
   };
@@ -76,11 +104,23 @@ export default function ContactFormClient() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+            <input
+              type="text"
+              name="website"
+              tabIndex={-1}
+              autoComplete="off"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+            />
+          </div>
+
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
+            <label htmlFor="contact-name" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
               Your Name <span className="text-[#991B1B]">*</span>
             </label>
             <input
+              id="contact-name"
               type="text"
               {...register('fullName')}
               placeholder="e.g. Fatima Ali"
@@ -98,10 +138,11 @@ export default function ContactFormClient() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
+              <label htmlFor="contact-phone" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
                 Phone Number <span className="text-[#991B1B]">*</span>
               </label>
               <input
+                id="contact-phone"
                 type="tel"
                 {...register('phone')}
                 placeholder="0300 1234567"
@@ -118,10 +159,11 @@ export default function ContactFormClient() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
+              <label htmlFor="contact-email" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
                 Email Address (Optional)
               </label>
               <input
+                id="contact-email"
                 type="email"
                 {...register('email')}
                 placeholder="fatima@example.com"
@@ -139,10 +181,11 @@ export default function ContactFormClient() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
+            <label htmlFor="contact-subject" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
               Subject <span className="text-[#991B1B]">*</span>
             </label>
             <input
+              id="contact-subject"
               type="text"
               {...register('subject')}
               placeholder="e.g. Inquiry about Noor Bridal Set delivery"
@@ -159,10 +202,11 @@ export default function ContactFormClient() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
+            <label htmlFor="contact-message" className="block text-xs font-semibold uppercase tracking-wider text-[#1F1F1F] mb-1">
               Message <span className="text-[#991B1B]">*</span>
             </label>
             <textarea
+              id="contact-message"
               rows={4}
               {...register('message')}
               placeholder="How can we assist you with our jewellery collections?"
@@ -177,6 +221,23 @@ export default function ContactFormClient() {
               </p>
             )}
           </div>
+
+          {serverError && (
+            <div role="alert" className="p-3 rounded-lg border border-[#991B1B]/30 bg-rose-50 text-xs text-[#991B1B] space-y-1">
+              <p className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{serverError}</span>
+              </p>
+              <a
+                href={siteConfig.contact.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block font-semibold underline underline-offset-2 hover:text-[#0B0D12]"
+              >
+                Message us on WhatsApp instead
+              </a>
+            </div>
+          )}
 
           <button
             type="submit"

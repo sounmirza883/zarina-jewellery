@@ -25,6 +25,7 @@ import {
   Printer,
   Star,
   Ticket,
+  Mail,
   X,
   ChevronDown,
   Eye,
@@ -49,9 +50,12 @@ import {
 } from '@/lib/admin-store';
 import { DEFAULT_SETTINGS } from '@/lib/settings';
 import { fetchReviews } from '@/lib/admin-reviews';
+import { fetchNewMessageCount } from '@/lib/admin-messages';
+import { whatsappLink } from '@/lib/whatsapp';
 import ProductFormModal from '@/components/admin/ProductFormModal';
 import ReviewsTab from '@/components/admin/ReviewsTab';
 import CouponsTab from '@/components/admin/CouponsTab';
+import MessagesTab from '@/components/admin/MessagesTab';
 import OrderPdfButton from '@/components/OrderPdfButton';
 import ProductImage from '@/components/ProductImage';
 import AdminOrderChart from '@/components/AdminOrderChart';
@@ -66,7 +70,7 @@ export default function AdminPortalPage() {
   const [dataError, setDataError] = useState('');
 
   // Active Admin Tab
-  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'reviews' | 'coupons' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'reviews' | 'messages' | 'coupons' | 'settings'>('overview');
 
   // Orders State
   const [orders, setOrders] = useState<Order[]>([]);
@@ -87,6 +91,7 @@ export default function AdminPortalPage() {
 
   // Reviews waiting for approval (the Reviews tab manages the list itself)
   const [pendingReviews, setPendingReviews] = useState(0);
+  const [newMessages, setNewMessages] = useState(0);
 
   // Run a Supabase call; show its error in the dashboard banner instead of throwing.
   const guard = useCallback(async (fn: () => Promise<void>) => {
@@ -102,16 +107,18 @@ export default function AdminPortalPage() {
     () =>
       guard(async () => {
         // Reviews are optional here: a failure must not block orders and products from loading.
-        const [o, p, s, r] = await Promise.all([
+        const [o, p, s, r, messageCount] = await Promise.all([
           fetchOrders(),
           fetchProducts(),
           fetchSettings(),
           fetchReviews().catch(() => []),
+          fetchNewMessageCount().catch(() => 0),
         ]);
         setOrders(o);
         setProducts(p);
         setSettings(s);
         setPendingReviews(r.filter((review) => review.status === 'pending').length);
+        setNewMessages(messageCount);
       }),
     [guard]
   );
@@ -188,6 +195,12 @@ export default function AdminPortalPage() {
   const refreshPendingReviews = useCallback(() => {
     fetchReviews()
       .then((r) => setPendingReviews(r.filter((review) => review.status === 'pending').length))
+      .catch(() => {});
+  }, []);
+
+  const refreshNewMessages = useCallback(() => {
+    fetchNewMessageCount()
+      .then(setNewMessages)
       .catch(() => {});
   }, []);
 
@@ -272,11 +285,9 @@ export default function AdminPortalPage() {
   // Helper for WhatsApp confirmation message
   const getWhatsAppConfirmationUrl = (order: Order) => {
     const phone = order.customer.whatsapp || order.customer.phone;
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const intlPhone = cleanPhone.startsWith('0') ? '92' + cleanPhone.slice(1) : cleanPhone;
     const itemsSummary = order.items.map((i) => `${i.quantity}x ${i.product.name}`).join(', ');
     const message = `Assalam o Alaikum ${order.customer.fullName}! This is Zarina Jewels regarding your Order #${order.orderNumber}.\n\nItems: ${itemsSummary}\nTotal Payable on Delivery: Rs. ${order.total.toLocaleString()}\nDelivery Address: ${order.customer.address}, ${order.customer.city}.\n\nPlease reply YES to confirm your cash on delivery order for immediate dispatch. Thank you!`;
-    return `https://wa.me/${intlPhone}?text=${encodeURIComponent(message)}`;
+    return whatsappLink(phone, message);
   };
 
   // Status Badge Helper
@@ -536,6 +547,22 @@ export default function AdminPortalPage() {
 
             <button
               type="button"
+              onClick={() => setActiveTab('messages')}
+              className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
+                activeTab === 'messages'
+                  ? 'border-[#B8893B] text-[#D9B66A] bg-white/5'
+                  : 'border-transparent text-[#CCCCCC] hover:text-white'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Messages{newMessages > 0 ? ` (${newMessages} new)` : ''}</span>
+              {newMessages > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setActiveTab('coupons')}
               className={`px-3 py-2 rounded-t-lg lg:rounded-l-none lg:rounded-r-lg transition-colors border-b-2 lg:border-b-0 lg:border-l-2 flex items-center gap-1.5 cursor-pointer whitespace-nowrap lg:whitespace-normal lg:text-left lg:py-3 ${
                 activeTab === 'coupons'
@@ -756,7 +783,7 @@ export default function AdminPortalPage() {
             </div>
 
             {/* Quick Actions Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div
                 onClick={openNewProductModal}
                 className="bg-white p-5 rounded-xl border border-[#B8893B]/20 hover:border-[#B8893B] shadow-xs cursor-pointer transition-all flex items-center gap-4 group"
@@ -804,6 +831,23 @@ export default function AdminPortalPage() {
                   </h3>
                   <p className="text-xs text-[#575757]">
                     {pendingReviews} {pendingReviews === 1 ? 'review' : 'reviews'} awaiting approval
+                  </p>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setActiveTab('messages')}
+                className="bg-white p-5 rounded-xl border border-[#B8893B]/20 hover:border-[#B8893B] shadow-xs cursor-pointer transition-all flex items-center gap-4 group"
+              >
+                <div className="w-12 h-12 rounded-lg bg-[#FAF7F2] group-hover:bg-[#0B0D12] text-[#575757] group-hover:text-white flex items-center justify-center transition-colors">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-base font-medium text-[#1F1F1F] group-hover:text-[#0B0D12] transition-colors">
+                    Contact Messages
+                  </h3>
+                  <p className="text-xs text-[#575757]">
+                    {newMessages} {newMessages === 1 ? 'new message' : 'new messages'} to read
                   </p>
                 </div>
               </div>
@@ -1163,6 +1207,8 @@ export default function AdminPortalPage() {
         {/* ===================== TAB 4: STORE SETTINGS & COD ===================== */}
         {/* ===================== TAB: REVIEWS ===================== */}
         {activeTab === 'reviews' && <ReviewsTab onChanged={refreshPendingReviews} />}
+
+        {activeTab === 'messages' && <MessagesTab onChanged={refreshNewMessages} />}
 
         {activeTab === 'coupons' && <CouponsTab />}
 

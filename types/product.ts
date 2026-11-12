@@ -105,6 +105,17 @@ export interface Order {
   couponCode?: string | null;
 }
 
+export interface ContactMessage {
+  id: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  subject: string;
+  message: string;
+  status: 'new' | 'handled';
+  createdAt: string;
+}
+
 export type CouponKind = 'percent' | 'fixed' | 'free_shipping';
 
 export interface Coupon {
