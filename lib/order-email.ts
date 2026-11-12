@@ -3,29 +3,26 @@ import { siteConfig } from '@/config/site';
 import { lineUnitPrice } from './pricing';
 import { cartItemLabel, formatPKR, normalizePakistaniPhone } from './shop-logic';
 import { sendEmail } from './resend';
+import {
+  type BuiltEmail,
+  GOLD,
+  LINE,
+  SITE_URL,
+  buttonLink,
+  emailFrom,
+  escapeHtml,
+  heading,
+  multiline,
+  notifyRecipients,
+  oneLine,
+  section,
+  shell,
+} from './email-shared';
+
+export { escapeHtml, type BuiltEmail };
 
 // The two emails sent when an order is placed. Everything here is built from the order that
 // place_order returned (never from what the browser sent) and every customer-typed value is escaped.
-
-export interface BuiltEmail {
-  subject: string;
-  html: string;
-  text: string;
-}
-
-// Same address as metadataBase in app/layout.tsx.
-const SITE_URL = 'https://zarinajewels.pk';
-const GOLD = '#B8893B';
-const INK = '#0B0D12';
-const LINE = '#EADFCF';
-
-const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-export const escapeHtml = (value: string): string => value.replace(/[&<>"']/g, (c) => ESCAPES[c]);
-
-/** Subject lines must not carry line breaks (header injection). */
-const oneLine = (value: string): string => value.replace(/\s+/g, ' ').trim();
-
-const multiline = (value: string): string => escapeHtml(value).replace(/\r?\n/g, '<br>');
 
 function itemLines(order: Order) {
   return order.items.map((item) => ({
@@ -69,23 +66,6 @@ function itemsText(order: Order): string {
   const items = itemLines(order).map((l) => `- ${l.name} (${l.label}) x ${l.qty} - ${formatPKR(l.total)}`);
   const totals = totalRows(order).map(([label, value]) => `${label}: ${value}`);
   return [...items, '', ...totals].join('\n');
-}
-
-const heading = (value: string) =>
-  `<h1 style="margin:0 0 12px;font-family:Georgia,serif;font-size:24px;font-weight:normal;color:${INK}">${value}</h1>`;
-
-const section = (title: string, inner: string) =>
-  `<p style="margin:24px 0 6px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:${GOLD}">${escapeHtml(title)}</p><div style="font-size:14px;line-height:1.6">${inner}</div>`;
-
-function shell(title: string, inner: string): string {
-  return `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
-<body style="margin:0;background:#FAF7F2;font-family:Arial,Helvetica,sans-serif;color:#1F1F1F">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:24px 12px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid ${LINE}">
-<tr><td style="background:${INK};padding:18px 24px;color:#D9B66A;font-family:Georgia,serif;font-size:20px;letter-spacing:3px">${escapeHtml(siteConfig.name.toUpperCase())}</td></tr>
-<tr><td style="padding:24px">${inner}</td></tr>
-</table></td></tr></table></body></html>`;
 }
 
 /** The confirmation the customer gets (only sent when they typed an email at checkout). */
@@ -160,7 +140,7 @@ export function ownerEmail(order: Order): BuiltEmail {
       `<p style="margin:0;font-size:14px;color:#575757">Status: ${escapeHtml(order.status)}. Please phone the customer to confirm.</p>` +
       section('Customer', contactHtml) +
       section('Items', itemsHtml(order)) +
-      `<p style="margin:28px 0 0"><a href="${adminUrl}" style="display:inline-block;background:${INK};color:#ffffff;padding:10px 20px;text-decoration:none;font-size:13px;letter-spacing:1px">OPEN ADMIN</a></p>`
+      buttonLink(adminUrl, 'OPEN ADMIN')
   );
 
   const contactText = [
@@ -195,11 +175,8 @@ export function ownerEmail(order: Order): BuiltEmail {
  * Recipients and sender come from the server's environment; nothing here can throw.
  */
 export async function sendOrderEmails(order: Order, send: typeof sendEmail = sendEmail): Promise<void> {
-  const from = process.env.ORDER_EMAIL_FROM ?? '';
-  const owners = (process.env.ORDER_NOTIFY_EMAIL ?? '')
-    .split(',')
-    .map((address) => address.trim())
-    .filter(Boolean);
+  const from = emailFrom();
+  const owners = notifyRecipients();
   const buyer = order.customer.email?.trim();
 
   const jobs: Array<Promise<boolean>> = [];
