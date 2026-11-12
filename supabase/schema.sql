@@ -51,7 +51,7 @@
 --   rpc('place_order',   { p_lines: [{ variantId, quantity }], p_customer: {...}, p_coupon })  -- p_coupon optional
 --   rpc('validate_coupon', { p_code, p_lines: [{ variantId, quantity }] })   -- checkout preview
 --   rpc('wishlist_merge', { p_ids: ['zj-ring-01', ...] })                    -- signed-in customers
---   rpc('submit_contact', { p_name, p_phone, p_email, p_subject, p_message, p_hp })
+--   rpc('submit_contact', { p_name, p_phone, p_email, p_subject, p_message, p_hp })  -- returns the saved message (null if honeypot filled)
 --   rpc('submit_review', { p_product_id, p_rating, p_author, p_title, p_body, p_hp })
 --   rpc('save_product',  { p_product: {...}, p_variants: [...] })      -- admin only
 -- place_order also still accepts the older { productId, color, size, quantity } lines.
@@ -1211,7 +1211,12 @@ $$;
 -- ---------------------------------------------------------------------
 -- 14b. Contact Us: save a message for the admin to read
 --      Visitors cannot read or write the table directly; this function is the only way in.
+--      Returns the saved row as jsonb (snake_case columns) so the app can email the owner,
+--      or null when the honeypot is filled.
 -- ---------------------------------------------------------------------
+
+-- The earlier version returned void; create or replace cannot change a return type, so drop it first.
+drop function if exists public.submit_contact(text, text, text, text, text, text);
 
 create or replace function public.submit_contact(
   p_name    text,
@@ -1221,7 +1226,7 @@ create or replace function public.submit_contact(
   p_message text,
   p_hp      text default ''
 )
-returns void
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
@@ -1234,10 +1239,11 @@ declare
   v_subject text := trim(coalesce(p_subject, ''));
   v_message text := trim(coalesce(p_message, ''));
   v_key     text;
+  v_row     public.contact_messages;
 begin
-  -- Honeypot: real people leave this field empty. Pretend it worked.
+  -- Honeypot: real people leave this field empty. Pretend it worked (nothing saved, no email).
   if coalesce(p_hp, '') <> '' then
-    return;
+    return null;
   end if;
 
   if length(v_name) not between 3 and 100 then
@@ -1276,7 +1282,10 @@ begin
   end if;
 
   insert into public.contact_messages (full_name, phone, email, subject, message)
-  values (v_name, v_phone, v_email, v_subject, v_message);
+  values (v_name, v_phone, v_email, v_subject, v_message)
+  returning * into v_row;
+
+  return to_jsonb(v_row);
 end;
 $$;
 

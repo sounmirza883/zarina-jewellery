@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle, MessageCircle, Phone, RotateCcw, Trash2 } from 'lucide-react';
 import { deleteMessage, fetchMessages, setMessageStatus } from '@/lib/admin-messages';
-import { toWhatsAppNumber, whatsappLink } from '@/lib/whatsapp';
-import { siteConfig } from '@/config/site';
+import { contactReplyText, toWhatsAppNumber, whatsappLink } from '@/lib/whatsapp';
 import type { ContactMessage } from '@/types/product';
 
 type Filter = 'all' | 'new' | 'handled';
@@ -16,10 +15,6 @@ const FILTERS: { value: Filter; label: string }[] = [
 ];
 
 const errorMessage = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong. Please try again.');
-
-/** The greeting that is ready in the WhatsApp chat; the team can edit it before sending. */
-const replyText = (m: ContactMessage) =>
-  `Assalam o Alaikum ${m.fullName}! This is ${siteConfig.name} replying to your message "${m.subject}".`;
 
 export default function MessagesTab({ onChanged }: { onChanged?: () => void }) {
   const [messages, setMessages] = useState<ContactMessage[]>([]);
@@ -163,7 +158,7 @@ export default function MessagesTab({ onChanged }: { onChanged?: () => void }) {
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <a
-                    href={whatsappLink(message.phone, replyText(message))}
+                    href={whatsappLink(message.phone, contactReplyText(message))}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
